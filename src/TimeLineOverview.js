@@ -1,5 +1,5 @@
 import * as d3 from "d3";
-import { darken, log } from "./utils.js";
+import { darken } from "./utils.js";
 
 function TimeLineOverview({
   ts,
@@ -67,10 +67,7 @@ function TimeLineOverview({
     groupSelected,
     dataNotSelected,
     medians,
-    hasSelection,
-    childSelections = [],
-    childPosition,
-    otherSelectionToHightlight
+    hasSelection
   ) {
     dataNotSelected = dataNotSelected ? dataNotSelected : [];
     context.clearRect(0, 0, canvas.node().width, canvas.node().height);
@@ -94,12 +91,11 @@ function TimeLineOverview({
 
       dataSelected.forEach((data, group) => {
         if (group !== groupSelected) {
-          let selectedColor = computeColor(group, childPosition);
+          let selectedColor = computeColor(group);
           console.log(
             "Render selected selectedColor",
             selectedColor,
-            group,
-            childPosition
+            group
           );
 
           // Render selected
@@ -115,7 +111,7 @@ function TimeLineOverview({
       renderOverviewCanvasSubset(
         dataSelected.get(groupSelected),
         ts.selectedAlpha,
-        computeColor(groupSelected, childPosition).toString(),
+        computeColor(groupSelected).toString(),
         groupSelected
       );
 
@@ -132,25 +128,6 @@ function TimeLineOverview({
       }
     }); */
 
-      // Render Highlighted selection
-      if (otherSelectionToHightlight) {
-        let positionTs = otherSelectionToHightlight.positionTs;
-        let groupId = otherSelectionToHightlight.groupId;
-        if (
-          positionTs !== childPosition &&
-          childSelections[positionTs] && // Can be null when start a new Brush
-          childSelections[positionTs].has(groupId)
-        ) {
-          let color = computeColor(groupId, positionTs);
-          renderOverviewCanvasSubset(
-            childSelections[positionTs].get(groupId),
-            ts.highlightAlpha,
-            color,
-            groupId
-          );
-        }
-      }
-
       context.save();
       // Render group Medians
       if (medians) {
@@ -164,7 +141,7 @@ function TimeLineOverview({
           }
           let path = new Path2D(linem(d[1]));
           context.setLineDash(ts.medianLineDash);
-          context.strokeStyle = darken(computeColor(d[0], childPosition));
+          context.strokeStyle = darken(computeColor(d[0]));
           context.stroke(path);
         });
       }
@@ -172,13 +149,7 @@ function TimeLineOverview({
     }
   }
 
-  function computeColor(groupId, childPosition) {
-    if (childPosition !== undefined)
-      return ts.brushesColorScale[groupId](childPosition);
-
-    if (ts.brushesColorScale instanceof Array)
-      return ts.brushesColorScale[groupId](childPosition);
-
+  function computeColor(groupId) {
     return ts.brushesColorScale(groupId);
   }
 
@@ -238,21 +209,17 @@ function TimeLineOverview({
 
   me.render = function (
     dataSelected,
+    groupSelected,
     dataNotSelected,
     medians,
-    hasSelection,
-    childSelections,
-    childPosition,
-    otherSelectionToHightlight
+    hasSelection
   ) {
     renderOvwerview(
       dataSelected,
+      groupSelected,
       dataNotSelected,
       medians,
-      hasSelection,
-      childSelections,
-      childPosition,
-      otherSelectionToHightlight
+      hasSelection
     );
   };
 

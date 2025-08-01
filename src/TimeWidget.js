@@ -1,7 +1,7 @@
 ﻿import * as d3 from "d3";
 import { add, intervalToDuration, sub } from "date-fns";
 
-import { eventType, log } from "./utils.js";
+import { log } from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -87,7 +87,6 @@ function TimeWidget(
     groupAttr = null, // DEPRECATED use color instead: Specifies the attribute to be used to discriminate the groups (Note that it also supports functions).
     overviewWidth, // Legacy, to be deleted
     overviewHeight, // Legacy, to be deleted
-    tsParent, // Set other TimeWidget parent to connect them.
     highlightAlpha = 1, // Transparency oh the highlighted lines (lines selected in other TS)
   } = {}
 ) {
@@ -123,10 +122,6 @@ function TimeWidget(
     nGroupsData,
     timelineDetails, // Centralizes the details component
     timelineOverview, // Centralizes the overview component
-    tsElements, // Stores the HTML target of all connected TimeWidgets
-    tsElementsSelection, // Stores the selection made by other connected TimeWidgets
-    positionTs, // Stores the position of the current TimeWidget. 0 is the top.
-    otherSelectionToHightlight, // Determines what group and certain ts level must be highlighted
     brushes;
 
   // Exported Parameters
@@ -197,10 +192,6 @@ function TimeWidget(
     .style("background-color", ts.backgroundColor)
     .node();
 
-  // Listen to customEvent to connect TimeWidgets
-  d3.select(target).on("TimeWidget", onTimeWidgetEvent);
-  d3.select(target).on("input", onInput);
-
   divControls =
     divControls ||
     d3.select(target).select("#control").node() ||
@@ -218,8 +209,6 @@ function TimeWidget(
   dataNotSelected = [];
   selectedGroupData = new Set();
   showNonSelected = true;
-  //positionTs = 0;
-  tsElementsSelection = [];
 
   function initBrushesControls() {
     groupsElement.innerHTML = `<div style="flex-basis:100%;">
@@ -239,129 +228,27 @@ function TimeWidget(
   }
 
   function computeBrushColor(groupId) {
-    if (positionTs !== undefined)
-      return ts.brushesColorScale[groupId](positionTs);
-
-    if (ts.brushesColorScale instanceof Array)
-      return ts.brushesColorScale[groupId](positionTs);
-
     return ts.brushesColorScale(groupId);
   }
 
   function onAddBrushGroup() {
     brushes.addBrushGroup();
-
-    //Sent event to others TS
-    if (tsElements) {
-      let event = new CustomEvent("TimeWidget", {
-        detail: {
-          type: eventType.addBrushGroup,
-        },
-      });
-      sentEvent(event);
-    }
   }
 
   function onChangeNonSelected(newState) {
     showNonSelected = newState;
-
-    if (tsElements) {
-      let event = new CustomEvent("TimeWidget", {
-        detail: {
-          type: eventType.changeNonSelected,
-          data: {
-            newState: newState,
-          },
-        },
-      });
-      sentEvent(event);
-    }
   }
 
   function onChangeBrushGroupState(id, newState) {
     brushes.changeBrushGroupState(id, newState);
-
-    //Sent event to ohter Ts
-    if (tsElements) {
-      let event = new CustomEvent("TimeWidget", {
-        detail: {
-          type: eventType.changeBrushGroupState,
-          data: {
-            id: id,
-            newState: newState,
-          },
-        },
-      });
-      sentEvent(event);
-    }
-  }
-
-  function onInput() {
-    log("Oninput test");
   }
 
   function onRemoveBrushGroup(id) {
     brushes.removeBrushGroup(id);
-
-    // Sent event to others TS
-    if (tsElements) {
-      let event = new CustomEvent("TimeWidget", {
-        detail: {
-          type: eventType.removeBrushGroup,
-          data: id,
-        },
-      });
-
-      sentEvent(event);
-    }
   }
 
   function onSelectBrushGroup(id) {
     brushes.selectBrushGroup(id);
-    // Sent event to others TS
-    if (tsElements) {
-      let event = new CustomEvent("TimeWidget", {
-        detail: {
-          type: eventType.selectBrushGroup,
-          data: id,
-        },
-      });
-
-      sentEvent(event);
-    }
-  }
-
-  function onChangeSelectedBrush(brush) {
-    if (tsElements) {
-      if (brush) {
-        let event = new CustomEvent("TimeWidget", {
-          detail: {
-            type: eventType.deselectAllBrushes,
-          },
-        });
-        sentEvent(event);
-      }
-
-      let event;
-      if (brush) {
-        event = new CustomEvent("TimeWidget", {
-          detail: {
-            type: eventType.highlightSelection,
-            data: {
-              positionTs: positionTs,
-              groupId: brush[1].group,
-            },
-          },
-        });
-      } else {
-        event = new CustomEvent("TimeWidget", {
-          detail: {
-            type: eventType.highlightSelection,
-          },
-        });
-      }
-      sentEvent(event);
-    }
   }
 
   function renderBrushesControls() {
@@ -793,11 +680,9 @@ function TimeWidget(
       scaleX: overviewX,
       scaleY: overviewY,
       updateTime: 150,
-      tsLevel: positionTs,
       selectionCallback: onSelectionChange,
       groupsCallback: onBrushGroupsChange,
       changeSelectedCoordinatesCallback: onBrushCoordinatesChange,
-      selectedBrushCallback: onChangeSelectedBrush,
     });
 
     gGroupBrushes
@@ -1223,20 +1108,6 @@ function TimeWidget(
       }
     });
 
-    // Delete the groupsNotSelected in otherTs selection
-    let mTsElementSelection = [];
-    if (tsElementsSelection) {
-      tsElementsSelection.forEach((tsSelection) => {
-        if (!tsSelection) mTsElementSelection.push(null);
-        else {
-          let groupsSelected = new Map();
-          tsSelection.forEach((dataGroup, gId) => {
-            if (enableBrushGroups.has(gId)) groupsSelected.set(gId, dataGroup);
-          });
-          mTsElementSelection.push(groupsSelected);
-        }
-      });
-    }
 
     // Delete the notSelected elements that are selected.
     mDataSelected.forEach((d) => mDataNotSelected.delete(d));
@@ -1247,10 +1118,7 @@ function TimeWidget(
       brushes.getBrushGroupSelected(),
       showNonSelected ? dataNotSelected : [],
       medians,
-      hasSelection,
-      mTsElementSelection, // print the selections made by child Elements
-      positionTs,
-      otherSelectionToHightlight
+      hasSelection
     );
 
     if (ts.hasDetails) {
@@ -1318,8 +1186,7 @@ function TimeWidget(
   function onSelectionChange(
     newDataSelected = dataSelected,
     newDataNotSelected = dataNotSelected,
-    hasSelection = brushes.hasSelection(),
-    update = true
+    hasSelection = brushes.hasSelection()
   ) {
     dataSelected = newDataSelected;
     dataNotSelected = newDataNotSelected;
@@ -1335,23 +1202,16 @@ function TimeWidget(
       renderNotSelected = dataNotSelected;
     }
 
-    if (tsElements) {
-      ({ renderSelected, renderNotSelected } = filterByExternalSelected(
-        renderSelected,
-        renderNotSelected
-      ));
-    }
-
     // Compute the medians if needed
     if (showGroupMedian) {
       getBrushGroupsMedians(renderSelected);
     }
 
+
     render(renderSelected, renderNotSelected, hasSelection); // Print the filtered data by active dataGroups
 
     renderBrushesControls();
     triggerValueUpdate(renderSelected);
-    sentSelection(renderSelected, update);
   }
 
   // Called every time the brushGroups changes
@@ -1421,188 +1281,6 @@ function TimeWidget(
     };
     divOverview.brushGroups = brushes.getBrushesGroup();
     updateStatus();
-  }
-
-  function sentSelection(selection, update) {
-    //if (brushes.hasSelection()) {
-    let eventSelection = new CustomEvent("TimeWidget", {
-      detail: {
-        type: eventType.changeSelection,
-        data: brushes.hasSelection() ? selection : null,
-      },
-    });
-
-    sentEvent(eventSelection);
-
-    if (update) {
-      let eventUpdate = new CustomEvent("TimeWidget", {
-        detail: {
-          type: eventType.update,
-        },
-      });
-      sentEvent(eventUpdate);
-    }
-
-    render(renderSelected, renderNotSelected, brushes.hasSelection());
-    //}
-  }
-
-  // Send a customEvent to all TimeWidgets but the sender
-  function sentEvent(customEvent) {
-    customEvent.detail.sourceId = positionTs;
-    if (!tsElements) return;
-
-    tsElements.forEach((otherTs, id) => {
-      if (id !== positionTs) otherTs.dispatchEvent(customEvent);
-    });
-  }
-
-  function onTimeWidgetEvent(event) {
-    let eventData = event.detail;
-    log(
-      "customEvent",
-      "destination",
-      positionTs,
-      "source",
-      eventData.sourceId,
-      eventData.type
-    );
-    switch (eventData.type) {
-      case eventType.changeSelection:
-        tsElementsSelection[eventData.sourceId] = eventData.data;
-        break;
-      case eventType.update:
-        onUpdateEvent(eventData.sourceId, eventData.data);
-        break;
-      case eventType.addBrushGroup:
-        brushes.addBrushGroup();
-        break;
-      case eventType.removeBrushGroup:
-        brushes.removeBrushGroup(eventData.data);
-        break;
-      case eventType.selectBrushGroup:
-        brushes.selectBrushGroup(eventData.data);
-        break;
-      case eventType.changeBrushGroupState:
-        brushes.changeBrushGroupState(
-          eventData.data.id,
-          eventData.data.newState
-        );
-        break;
-      case eventType.deselectAllBrushes:
-        brushes.deselectBrush();
-        break;
-      case eventType.highlightSelection:
-        if (eventData.data) {
-          otherSelectionToHightlight = {
-            positionTs: eventData.data.positionTs,
-            groupId: eventData.data.groupId,
-          };
-        } else {
-          otherSelectionToHightlight = null;
-        }
-        render(renderSelected, renderNotSelected, brushes.hasSelection());
-        break;
-      case eventType.changeNonSelected:
-        showNonSelected = eventData.data.newState;
-        onSelectionChange();
-        break;
-      default:
-        log("unsupported event", eventData);
-    }
-  }
-
-  function onUpdateEvent(tsId) {
-    // Only update the selection of the children, the parents only repaint
-    if (positionTs <= tsId) {
-      render(renderSelected, renderNotSelected, brushes.hasSelection());
-    } else {
-      onSelectionChange(
-        dataSelected,
-        dataNotSelected,
-        brushes.hasSelection(),
-        false
-      );
-    }
-  }
-
-  function changeBrushNames() {
-    if (tsElements) {
-      let groups = brushes.getBrushesGroup();
-      groups.forEach((group, id) => {
-        brushes.updateBrushGroupName(id, group.name + "." + positionTs);
-      });
-    }
-  }
-
-  function filterByExternalSelected(dataSelected, dataNotSelected) {
-    if (!tsElementsSelection || positionTs === 0) {
-      return {
-        renderSelected: dataSelected,
-        renderNotSelected: dataNotSelected,
-      };
-    }
-
-    /*
-        // compute a map that contains the data Ids selected in upper levels by brushGroups
-        let flatSelections = new Map();
-        tsElementsSelection.forEach((tsSelection, ix) => {
-          if (positionTs > ix) {
-            tsSelection.forEach((g, gId) => {
-              if (!flatSelections.has(gId)) {
-                flatSelections.set(gId, new Set());
-              }
-              g.forEach((d) => flatSelections.get(gId).add(d[0]));
-            });
-          }
-        }); */
-
-    let allSelected = new Set();
-    let previousSelected = new Map();
-
-    // Find the closes TS with selection made
-    let lastWithSelection;
-    for (let i = positionTs - 1; i >= 0; i--) {
-      if (tsElementsSelection[i]) {
-        lastWithSelection = i;
-        break;
-      }
-    }
-    // Filter with the last selection made.
-    if (lastWithSelection !== undefined) {
-      // do this because if(0) is false
-      tsElementsSelection[lastWithSelection].forEach((g, gId) => {
-        let selectedSet = new Set();
-        g.forEach((d) => {
-          selectedSet.add(d[0]);
-          allSelected.add(d[0]);
-        });
-        previousSelected.set(gId, selectedSet);
-      });
-
-      let fDataSelected = new Map();
-      dataSelected.forEach((g, id) => {
-        if (previousSelected.has(id)) {
-          let gFilter = g.filter((d) => previousSelected.get(id).has(d[0]));
-          fDataSelected.set(id, gFilter);
-        } else {
-          fDataSelected.set(id, g);
-        }
-      });
-
-      let fDataNotSelected = dataNotSelected.filter((d) =>
-        allSelected.has(d[0])
-      );
-      return {
-        renderSelected: fDataSelected,
-        renderNotSelected: fDataNotSelected,
-      };
-    } else {
-      return {
-        renderSelected: dataSelected,
-        renderNotSelected: dataNotSelected,
-      };
-    }
   }
 
   /*function brushesToDomain(brushesGroup) {
@@ -1686,20 +1364,6 @@ function TimeWidget(
     return arguments.length ? ((statusCallback = _), ts) : statusCallback;
   };
 
-  // Notify a parent TimeWidget the presence of a child, and calculate the total
-  // TimeWidget linked and the position of each of them.
-  ts.notifyParent = function (linkedTs, childs) {
-    linkedTs.unshift(target);
-    if (tsParent) tsElements = tsParent.notifyParent(linkedTs, childs + 1);
-    else tsElements = linkedTs;
-
-    positionTs = tsElements.length - 1 - childs;
-
-    if (brushes) brushes.setTsPosition(positionTs);
-    if (groupedData) sentSelection(renderSelected, false);
-
-    return tsElements;
-  };
 
   ts.data = function (_data) {
     data = _data;
@@ -1754,12 +1418,6 @@ function TimeWidget(
 
     onSelectionChange();
   };
-
-  if (tsParent) {
-    ts.notifyParent([], 0);
-    // Add the own selection
-    tsElementsSelection[positionTs] = null;
-  }
 
   // If we receive the data on initialization call ts.Data
   if (data && x && y && id) {

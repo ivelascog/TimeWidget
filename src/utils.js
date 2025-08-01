@@ -42,18 +42,6 @@ export function isInsideDomain(domain, scaleX, scaleY) {
   );
 }
 
-export const eventType = Object.freeze({
-  changeSelection: "changeSelection",
-  addBrushGroup: "newBrushGroup",
-  removeBrushGroup: "deleteBrushGroup",
-  selectBrushGroup: "selectBrushGroup",
-  changeNonSelected: "changeNonSelected",
-  changeBrushGroupState: "changeBrushGroupState",
-  deselectAllBrushes: "deselectAllBrushes",
-  highlightSelection: "highlightSelection",
-  update: "update",
-});
-
 export const BrushModes = Object.freeze({
   Intersect: "intersect",
   Contains: "contains",
