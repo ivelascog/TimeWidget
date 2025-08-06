@@ -336,7 +336,8 @@ function brushInteraction({
     x1 += distX;
     y0 += distY;
     y1 += distY;
-    gBrushes.selectAll("#brush-" + brushId).call(brush.brush.move, [
+    let d3Brush = gBrushes.selectAll("#brush-" + brushId);
+    d3Brush.call(brush.brush.move, [
       [x0, y0],
       [x1, y1],
     ]);
@@ -344,6 +345,8 @@ function brushInteraction({
       [x0, y0],
       [x1, y1],
     ];
+
+    updateCirclesSelected(d3Brush,brush);
     brush.selectionDomain = getSelectionDomain(brush.selection);
   }
 
@@ -359,7 +362,7 @@ function brushInteraction({
       return;
     }
     const [triggerId, triggerBrush] = trigger;
-    updateCirclesSelected.call(this,triggerBrush);
+    updateCirclesSelected(d3.select(this),triggerBrush);
 
     if (!selection || !triggerBrush.isSelected) return;
 
@@ -462,7 +465,7 @@ function brushInteraction({
     });
   }
 
-  function updateCirclesSelected(brushValue) {
+  function updateCirclesSelected(d3Brush,brushValue) {
     let selectedCircles = [];
     if (brushValue.isSelected) {
       let padding = 10;
@@ -484,7 +487,7 @@ function brushInteraction({
         }];
     }
 
-    d3.select(this)
+    d3Brush
         .selectAll(".circle")
         .data(selectedCircles)
         .join("circle")
@@ -546,7 +549,7 @@ function brushInteraction({
         );
       });
 
-    updateCirclesSelected.call(this, brushValue);
+    updateCirclesSelected(d3.select(this), brushValue);
 
     d3.select(this)
           .selectAll(".handle--w, .handle--e")
