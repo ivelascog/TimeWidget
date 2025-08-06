@@ -24,7 +24,6 @@ function brushInteraction({
   updateTime,
   brushShadow,
   minBrushSize = 5, // Min size in pixels of brushes
-  tsLevel, // Store the level of the TS for brushColor. See how to change this TODO
   selectionCallback = () => {}, // (dataSelected, dataNotSelected, hasSelection) => {} Called when selected elements change
   groupsCallback = () => {}, // (groups) => {} Called when information of the groups changes (not the selection made by them)
   changeSelectedCoordinatesCallback = () => {}, // (selection) => {} Called when the coordinates of the selected brush change.
@@ -111,6 +110,7 @@ function brushInteraction({
     brush[1].negate = not;
     updateBrush(brush);
     brushFilter();
+    drawBrushes();
   }
 
   const onBrushStart = (e, brushObject) => {
@@ -229,7 +229,7 @@ function brushInteraction({
       return;
     }
 
-    // dont execute this method when move brushes programatically (sourceEvent === null) or when there is no selection
+    // dont execute this method when move brushes programmatically (sourceEvent === null) or when there is no selection
     if (sourceEvent === undefined || !selection) return;
     //log("brushed", brush);
     brush[1].selection = selection;
@@ -349,7 +349,7 @@ function brushInteraction({
 
   // Move all selected brushes the same amount of the triggerBrush
   function moveSelectedBrushes({ selection, sourceEvent }, trigger) {
-    // dont execute this method when move brushes programatically
+    // dont execute this method when move brushes programmatically
     if (sourceEvent === undefined) return;
     if (!Array.isArray(trigger) || trigger.length !== 2) {
       log(
@@ -358,8 +358,9 @@ function brushInteraction({
       );
       return;
     }
-
     const [triggerId, triggerBrush] = trigger;
+    updateCirclesSelected.call(this,triggerBrush);
+
     if (!selection || !triggerBrush.isSelected) return;
 
     let [[x0, y0]] = selection;
@@ -384,7 +385,7 @@ function brushInteraction({
   function updateBrush([brushId, brush]) {
     let [[x0, y0], [x1, y1]] = brush.selection;
     let newIntersections = null;
-    // TODO Another form to do that is to assing the brush the function to calculate the intersection. It would make the code shorter, but I think less readable.
+    // TODO Another form to do that is to asing the brush the function to calculate the intersection. It would make the code shorter, but I think less readable.
     switch (brush.mode) {
       case BrushModes.Intersect:
         newIntersections = BVH_.intersect(x0, y0, x1, y1);
@@ -407,48 +408,10 @@ function brushInteraction({
       newIntersections = allKeys;
     }
 
-    // Draw the handles in contains brushes
-    updateBrushHandles();
-
     let updated = !compareSets(newIntersections, brush.intersections);
     brush.intersections = newIntersections;
 
     return updated;
-  }
-
-  // Update the brush look and feel depending on the mode and aggregation
-  function updateBrushHandles() {
-    gBrushes.selectAll(".brush").each(function ([, brush]) {
-      // Color the handles different if the brush is contains
-      d3.select(this)
-        .selectAll(".handle--w, .handle--e")
-        .style(
-          "fill",
-          brush.mode === BrushModes.Contains
-            ? darken(computeColor(brush.group))
-            : "none"
-        )
-        .style("opacity", 0.4);
-
-      // Color the handles different if the brush is negate
-      d3.select(this)
-          .selectAll(".handle--n, .handle--s")
-          .style("fill", brush.negate ? "red" : "none")
-          .style("opacity", 0.4);
-
-      // Brush tooltip help text
-      d3.select(this)
-        .selectAll("title")
-        .data([0]) // hack to create the title only once used instead of .append("title")
-        .join("title")
-        .text(
-          `Mode: ${
-            brush.mode === BrushModes.Contains ? "Contains" : "Intersect"
-          }\nAggregation: ${
-            brush.aggregation === BrushAggregation.And ? "And" : "Or"
-          }\nRight click for options`
-        );
-    });
   }
 
   function selectBrush(brush) {
@@ -499,7 +462,41 @@ function brushInteraction({
     });
   }
 
-  // Called by drawBrushes
+  function updateCirclesSelected(brushValue) {
+    let selectedCircles = [];
+    if (brushValue.isSelected) {
+      let padding = 10;
+      selectedCircles = [{
+        x: brushValue.selection[0][0] + padding,
+        y: brushValue.selection[0][1] + padding
+      },
+        {
+          x: brushValue.selection[1][0] - padding,
+          y: brushValue.selection[1][1] - padding
+        },
+        {
+          x: brushValue.selection[0][0] + padding,
+          y: brushValue.selection[1][1] - padding
+        },
+        {
+          x: brushValue.selection[1][0] - padding,
+          y: brushValue.selection[0][1] + padding
+        }];
+    }
+
+    d3.select(this)
+        .selectAll(".circle")
+        .data(selectedCircles)
+        .join("circle")
+        .attr("class", "circle")
+        .attr("cx", (d) => d.x)
+        .attr("cy", (d) => d.y)
+        .attr("r", "4px")
+        .attr("fill", darken(computeColor(brushValue.group)))
+        .attr("fill-opacity", 0.5);
+  }
+
+// Called by drawBrushes
   function drawOneBrush(d) {
     const brushValue = d[1];
 
@@ -511,8 +508,7 @@ function brushInteraction({
         "stroke-width",
         brushValue.group === brushGroupSelected ? "2px" : "0.5px"
       )
-      // .style("outline-style", brushValue.isSelected ? "dashed" : "solid")
-      .style("stroke-dasharray", brushValue.isSelected ? "4" : "")
+      .style("stroke-dasharray", brushValue.mode === BrushModes.Intersect ? "4" : "")
       .style("stroke", darken(computeColor(brushValue.group)))
       .style("outline-color", darken(computeColor(brushValue.group)))
       .style("fill", computeColor(brushValue.group))
@@ -550,6 +546,35 @@ function brushInteraction({
         );
       });
 
+    updateCirclesSelected.call(this, brushValue);
+
+    d3.select(this)
+          .selectAll(".handle--w, .handle--e")
+          .style(
+              "fill",
+              brushValue.aggregation === BrushAggregation.Or
+                  ? darken(computeColor(brushValue.group))
+                  : "none"
+          )
+          .style("opacity", 0.4);
+
+    d3.select(this)
+        .selectAll(".handle--n, .handle--s")
+        .style("fill", brushValue.negate ? "red" : "none")
+        .style("opacity", 0.4);
+
+    d3.select(this)
+        .selectAll("title")
+        .data([0]) // hack to create the title only once used instead of .append("title")
+        .join("title")
+        .text(
+            `Mode: ${
+                brushValue.mode === BrushModes.Contains ? "Contains" : "Intersect"
+            }\nAggregation: ${
+                brushValue.aggregation === BrushAggregation.And ? "And" : "Or"
+            }\nRight click for options`
+        );
+
     if (ts.showBrushTooltip) {
       d3.select(this)
         .selectAll(":not(.overlay)")
@@ -575,12 +600,6 @@ function brushInteraction({
   }
 
   function computeColor(groupId) {
-    // Not do if(tsLevel) because if(0) is false.
-    if (tsLevel !== undefined) return ts.brushesColorScale[groupId](tsLevel);
-
-    if (ts.brushesColorScale instanceof Array)
-      return ts.brushesColorScale[groupId](tsLevel);
-
     return ts.brushesColorScale(groupId);
   }
 
@@ -640,7 +659,7 @@ function brushInteraction({
           .style("outline-color", darken(computeColor(brush.group)))
           .style("fill", computeColor(brush.group));
 
-        // // if so set the new brush programatically, and delete the initial selection
+        // // if so set the new brush programmatically, and delete the initial selection
         me.moveBrush([id, brush], brush.initialSelection);
         // d3.select(this).call(
         //   brush.brush.move,
@@ -660,16 +679,6 @@ function brushInteraction({
   };
 
   me.addBrushGroup = function () {
-    // In case of a multivariate TS, it is not possible to add more groups than defined color families.
-    if (
-      tsLevel !== undefined &&
-      brushesGroup.size === ts.brushesColorScale.length
-    ) {
-      log(
-        "Another group cannot be added because there is no defined color family. "
-      );
-      return;
-    }
     let newId = getUnusedIdBrushGroup();
     let brushGroup = {
       isEnable: true,
@@ -897,19 +906,19 @@ function brushInteraction({
     );
   };
 
-  function procesFilters(filters) {
+  function processFilters(filters) {
     let processedFilters = [];
     for (let i = 0; i < filters.length; ++i) {
       let filter = filters[i];
       let processedFilter = generateFilter({
-        mode: filter.hasOwnProperty("mode") ? filter.mode : null,
-        aggregation: filter.hasOwnProperty("aggregation")
+        mode: Object.prototype.hasOwnProperty.call(filter, "mode") ? filter.mode : null,
+        aggregation: Object.prototype.hasOwnProperty.call(filter, "aggregation")
           ? filter.aggregation
           : null,
-        selectionPixels: filter.hasOwnProperty("selectionPixels")
+        selectionPixels: Object.prototype.hasOwnProperty.call(filter, "selectionPixels")
           ? filter.selectionPixels
           : null,
-        selectionDomain: filter.hasOwnProperty("selectionDomain")
+        selectionDomain: Object.prototype.hasOwnProperty.call(filter, "selectionDomain")
           ? filter.selectionDomain
           : null,
       });
@@ -1038,12 +1047,7 @@ function brushInteraction({
     drawBrushes();
   };
 
-  me.setTsPosition = function (position) {
-    tsLevel = position;
-    //drawBrushes();
-  };
-
-  // add brush group without funct to avoid callback
+  // add brush group without func to avoid callback
   let newId = getUnusedIdBrushGroup();
   let brushGroup = {
     isEnable: true,
