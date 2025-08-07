@@ -680,6 +680,7 @@ function TimeWidget(
       scaleX: overviewX,
       scaleY: overviewY,
       updateTime: 150,
+      extent: [[0,0],[width - margin.left - margin.right, height - margin.top - margin.bottom],],
       selectionCallback: onSelectionChange,
       groupsCallback: onBrushGroupsChange,
       changeSelectedCoordinatesCallback: onBrushCoordinatesChange,

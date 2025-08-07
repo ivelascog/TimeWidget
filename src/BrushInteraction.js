@@ -11,6 +11,7 @@ function brushInteraction({
   ts,
   data,
   element,
+  extent = undefined, //Defines the area in which the brush can move ([[[x0, y0], [x1, y1]])
   tooltipTarget,
   contextMenuTarget,
   xPartitions,
@@ -208,6 +209,7 @@ function brushInteraction({
       brush.on("brush.show", (event) => tShowTooltip(event, brushObject));
     }
     brush.on("end", onBrushEnd);
+    if (extent) brush.extent(extent);
 
     brushCount++;
   }
