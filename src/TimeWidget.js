@@ -15,6 +15,7 @@ function TimeWidget(
     showBrushesControls = true, // If false you can still use brushesControlsElement to show the control on a different element on your app. For this use the exported value "groups"
     showBrushTooltip = true, // Allows to display a tooltip on the brushes containing its coordinates.
     showBrushesCoordinates = true, // If false you can still use brushesCoordinatesElement to show the control on a different element on your app. For this use the exported value "brushesCoordinates"
+      showDataGroups = true, // If false you can still use dataGroupElement to show the control on a different element on your app. For this use the exported value "dataGroups"
     showDetails = true, // If false and with hasDetails = true, you can still use detailsElement to show the control on a different element on your app. For this use the exported value "details"
     /* Data */
     x = (d) => d.x, // Attribute to show in the X axis (Note that it also supports functions)
@@ -102,10 +103,10 @@ function TimeWidget(
     divOverview,
     divRender,
     divControls,
-    divData,
-    brushesCoordinates,
+    brushesCoordinatesElement,
     detailsElement,
     groupsElement,
+      dataGroupsElement,
     svg,
     gGroupBrushes,
     gBrushes,
@@ -196,14 +197,17 @@ function TimeWidget(
     divControls ||
     d3.select(target).select("#control").node() ||
     d3.create("div").attr("id", "control").node();
-  brushesCoordinates =
-    brushesCoordinates ||
+  brushesCoordinatesElement =
+    brushesCoordinatesElement ||
     d3.select(target).select("#brushesCoordinates").node() ||
     d3.create("div").attr("id", "brushesCoordinates").node();
   groupsElement =
     groupsElement ||
     d3.select(target).select("#brushesGroups").node() ||
     d3.create("div").attr("id", "brushesGroups").node();
+  dataGroupsElement = dataGroupsElement ||
+      d3.select(target).select("#dataGroups").node() ||
+      d3.create("div").attr("id", "dataGroups").node();
   medianBrushGroups = new Map();
   dataSelected = new Map();
   dataNotSelected = [];
@@ -456,14 +460,6 @@ function TimeWidget(
   }
 
   function init() {
-    //CreateOverView
-    divData = d3
-      .select(divControls)
-      .selectAll("div#divData")
-      .data([1])
-      .join("div")
-      .attr("id", "divData");
-
     divRender = d3
       .select(divOverview)
       .selectAll("div#render")
@@ -699,8 +695,10 @@ function TimeWidget(
     divOverview.appendChild(divControls);
     initBrushCoordinates();
     initBrushesControls();
+    initDataGroupsElement();
 
-    return g;
+
+      return g;
   }
 
   // Callback that is called every time the coordinates of the selected brush are modified.
@@ -742,8 +740,8 @@ function TimeWidget(
   }
 
   function initBrushCoordinates() {
-    brushesCoordinates.innerHTML = "";
-    let selection = d3.select(brushesCoordinates);
+    brushesCoordinatesElement.innerHTML = "";
+    let selection = d3.select(brushesCoordinatesElement);
     let divX = selection.append("div");
 
     divX.append("span").text(xLabel ? xLabel : "X Axis:");
@@ -812,16 +810,16 @@ function TimeWidget(
       selection
         .insert("h3", ":first-child")
         .text("Current TimeBox Coordinates:");
-      divControls.appendChild(brushesCoordinates);
+      divControls.appendChild(brushesCoordinatesElement);
     }
   }
 
-  function generateDataSelectionDiv() {
+  function initDataGroupsElement() {
     if (color) {
-      divData.node().innerHTML = "";
-      divData.append("span").text("Data groups: ");
+      dataGroupsElement.innerHTML = "";
+      let selection = d3.select(dataGroupsElement);
 
-      let divButtons = divData
+      let divButtons = selection
         .selectAll(".groupData")
         .data(selectedGroupData)
         .join("div")
@@ -849,6 +847,13 @@ function TimeWidget(
           onGroupDataChange();
         });
       divButtons.append("span").text((d) => d);
+
+      if (showDataGroups) {
+        selection
+            .insert("h3", ":first-child")
+            .text("Data Groups:");
+        divControls.appendChild(dataGroupsElement);
+      }
     }
   }
 
@@ -1405,8 +1410,6 @@ function TimeWidget(
     });
     timelineOverview.data(groupedData);
 
-    generateDataSelectionDiv();
-
     initDetails({ overviewX, overviewY });
 
     dataSelected.set(0, []);
@@ -1452,8 +1455,9 @@ function TimeWidget(
   // Make the ts object accessible
   divOverview.ts = ts;
   divOverview.details = detailsElement;
-  divOverview.brushesCoordinates = brushesCoordinates;
+  divOverview.brushesCoordinates = brushesCoordinatesElement;
   divOverview.groups = groupsElement;
+  divOverview.dataGroups = dataGroupsElement;
   return divOverview;
 }
 

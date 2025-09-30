@@ -173,11 +173,11 @@ For the definition of the reference lines, see the [custom formats](#reference-l
 This section will show all possible options grouped by categories.
 ### Elements
  -  **target**: pass a html element where you want to render
- -  **detailsElement**:  pass a html element  where you want to render the details
- -  **coordinatesElement**: pass a html element where you want to render the brush coordinates Input.
- -  **groupsElement**: pass a html element where you want to have the brushes controls.
- -  **showBrushesControls**:If true, the brush control is displayed in the default location. If false you can still use brushesControlsElement to show the control on a different element on your app
+ -  **showBrushesControls**:If true, the brush control is displayed in the default location. If false you can still use brushesControlsElement to show the control on a different element on your app. For this use the exported value "groups"
  -  **showBrushTooltip**: Allows to display a tooltip on the brushes containing its coordinates.
+ -  **showBrushesCoordinates**: If false you can still use brushesCoordinatesElement to show the control on a different element on your app. For this use the exported value "brushesCoordinates"
+ -  **showDataGroups**: If false you can still use dataGroupElement to show the control on a different element on your app. For this use the exported value "dataGroups"
+ -  **showDetails**: If false and with hasDetails = true, you can still use detailsElement to show the control on a different element on your app. For this use the exported value "details"
 ### Data
  - **x**:  Attribute to show in the X axis (Note that it also supports functions)
  - **y**:  Attribute to show in the Y axis (Note that it also supports functions)
