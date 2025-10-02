@@ -1,5 +1,5 @@
 import * as htl from "htl";
-import { BrushAggregation, BrushModes, log } from "./utils.js";
+import {BrushAggregation, BrushModes, log} from "./utils.js";
 
 function BrushContextMenu({ target, callback }) {
   const intersectE = htl.html`<input type="radio" name="mode" id="__ts_c_intersect" value="intersect">`;
@@ -7,7 +7,7 @@ function BrushContextMenu({ target, callback }) {
   const notE = htl.html`<input type="checkbox"  id="__ts_c_not">`;
   const andE = htl.html`<input type="radio" name="aggregation" id="__ts_c_and" value="and">`;
   const orE = htl.html`<input type="radio" name="aggregation" id="__ts_c_or" value="or">`;
-  const closeBtn = htl.html`<button style="position: absolute; right: 0; top: 0; padding: 0; margin: 0; border: none; background: none; cursor: pointer; font-size: 0.8rem; color: #444; line-height: 1; padding: 2px 2px;">&times;</button>`;
+  const closeBtn = htl.html`<button style="position: absolute; right: 0; top: 0; margin: 0; border: none; background: none; cursor: pointer; font-size: 0.8rem; color: #444; line-height: 1; padding: 2px 2px;">&times;</button>`;
 
   intersectE.onchange = onChange;
   containsE.onchange = onChange;
@@ -79,6 +79,8 @@ function BrushContextMenu({ target, callback }) {
       </style> 
     </div>`;
 
+  let contextNode = target.getElementsByClassName("__ts_contextMenu");
+  if (contextNode.length > 0) target.removeChild(contextNode[0]);
   target.appendChild(contextMenu);
 
   // To keep track of the hiding timeout

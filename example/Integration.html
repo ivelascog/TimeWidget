@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Example</title>
+</head>
+<body>
+<div>
+    <label for="slider">Select domain for Y axis</label>
+    <input type="range" id="slider" list="tickmarks">
+    <datalist id="tickmarks"></datalist>
+
+    <label for="alpha">Select non selected alpha</label>
+    <input type="number" id="alpha" max="1" min="0" step="0.1" value="0.5">
+</div>
+<div id="target" style="float: left"></div>
+<script src="https://d3js.org/d3.v7.js"></script>
+
+<script src="../dist/TimeWidget.js"></script>
+
+<script>
+    let fmt = d3.timeParse("%Y-%m-%d %H:%M:%S");
+    let slider = document.getElementById('slider')
+    let alpha = document.getElementById('alpha')
+
+    d3.csv("./Crypto.csv", type).then((data) => {
+        data = data.filter((d) => d["Date"].getFullYear() < 2018 && d["Symbol"] !== "BTC");
+        setRange(data);
+
+        let target = TimeWidget(data, {
+            target: d3.select("#target").node(),
+            x: "Date",
+            y: "Low",
+            id: "Symbol",
+            noSelectedAlpha: alpha.value
+        });
+
+        slider.addEventListener("input", () => {
+            target.ts.yDomain = [slider.min, slider.value];
+            target.ts.update();
+        })
+        alpha.addEventListener("input", () => {
+            target.ts.noSelectedAlpha = alpha.value;
+            target.ts.update();
+        })
+    });
+
+    function setRange(data) {
+        slider.min = d3.min(data, d => d.Low)
+        slider.max = d3.max(data, d => d.Low)
+        slider.value = slider.max;
+    }
+
+    function type(row) {
+        row.SNo = +row.SNo;
+        row.Date = fmt(row.Date);
+        row.Low = +row.Low;
+        row.Open = +row.Open;
+        row.Volume = +row.Volume;
+        row.High = +row.High;
+        row.Close = +row.Close;
+        row["Adjusted Close"] = +row["Adjusted Close"];
+        return row;
+    }
+</script>
+</body>
+</html>

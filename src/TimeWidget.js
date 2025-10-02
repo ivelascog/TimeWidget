@@ -1,7 +1,7 @@
 ﻿import * as d3 from "d3";
-import { add, intervalToDuration, sub } from "date-fns";
+import {add, intervalToDuration, sub} from "date-fns";
 
-import { log } from "./utils.js";
+import {log} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -126,8 +126,9 @@ function TimeWidget(
     brushes;
 
   // Exported Parameters
-  ts.xPartitions = xPartitions;
-  ts.yPartitions = yPartitions;
+    ts.x = x;
+    ts.y = y;
+    ts.id = id;
   ts.defaultAlpha = defaultAlpha;
   ts.selectedAlpha = selectedAlpha;
   ts.noSelectedAlpha = noSelectedAlpha;
@@ -158,6 +159,9 @@ function TimeWidget(
   ts.xScale = xScale;
   ts.highlightAlpha = highlightAlpha;
   ts.selectedColorTransform = selectedColorTransform;
+    ts.xDomain = xDomain;
+    ts.yDomain = yDomain;
+    ts.maxTimelines = maxTimelines;
 
   //Backwards compatibility with groupAttr.
   if (groupAttr) {
@@ -277,7 +281,7 @@ function TimeWidget(
           ">
             <input type="checkbox" id="checkBoxShowBrushGroup" ${
               d[1].isEnable ? "checked" : ""
-            } ></input>
+        } >
             <div
               id="groupColor"
               style="
@@ -299,7 +303,7 @@ function TimeWidget(
                 groupName.length
               }ch;"
               contenteditable="true"
-              value="${groupName}"></input>
+              value="${groupName}">
             <span id="groupSize" style="margin-right: 5px;">(${groupCount})</span>
            <button style="color: red;font-weight: bold; border:none; background:none;
             display:${
@@ -369,7 +373,7 @@ function TimeWidget(
           ">
             <input type="checkbox" id="checkBoxShowBrushGroup" ${
               showNonSelected ? "checked" : ""
-            } ></input>
+        } >
             <output
               style="margin-right: 0; border: none;outline: none; width: ${
                 groupName.length
@@ -445,13 +449,13 @@ function TimeWidget(
 
     overviewX.range([0, width - ts.margin.right - ts.margin.left]).nice();
 
-    if (!yDomain) {
-      yDomain = fixAxis && _this ? _this.extent.y : d3.extent(fData, y); // Keep same axes as in the first rendering
+      if (!ts.yDomain) {
+          ts.yDomain = fixAxis && _this ? _this.extent.y : d3.extent(fData, y); // Keep same axes as in the first rendering
     }
 
     overviewY = yScale.copy();
 
-    overviewY.domain(yDomain);
+      overviewY.domain(ts.yDomain);
 
     overviewY
       .range([height - ts.margin.top - ts.margin.bottom, 0])
@@ -697,6 +701,25 @@ function TimeWidget(
     initBrushesControls();
     initDataGroupsElement();
 
+      timelineOverview.setScales({
+          scaleX: overviewX,
+          scaleY: overviewY,
+      });
+      timelineOverview.data(groupedData);
+
+      initDetails({overviewX, overviewY});
+
+      dataSelected.set(0, []);
+      renderSelected = dataSelected;
+      dataNotSelected = groupedData;
+      renderNotSelected = dataNotSelected;
+
+      if (_this) brushes.addFilters(_this.value.status, true);
+      else if (filters) brushes.addFilters(filters, true);
+
+      if (referenceCurves) {
+          ts.addReferenceCurves(referenceCurves);
+      }
 
       return g;
   }
@@ -1260,6 +1283,17 @@ function TimeWidget(
       .flat();
   }
 
+    function asTidy(map, groupAttributeName = "tw_group") {
+        let aux = Array.from(map.entries()).map(([group, line]) =>
+            Array.from(line.values()).map(v =>
+                v.map(d => {
+                    d[groupAttributeName] = group;
+                    return d;
+                })));
+        return aux.flat(2);
+
+    }
+
   // Triggers the update of the selection calls callback and dispatches input event
   function triggerValueUpdate(sel = renderSelected) {
     let value = new Map();
@@ -1270,7 +1304,8 @@ function TimeWidget(
       value.set(brushGroup.name, groupMap);
     }
 
-    divOverview.value = value;
+      divOverview.value = asTidy(value, "tw_group");
+      divOverview.value.legacyValue = value; //Raw value as previous versions
     divOverview.value.groupsColorScale = brushesColorScale;
     divOverview.value.nonSelectedIds = dataNotSelected.map((d) => d[0]);
     divOverview.value.selectedIds = dataSelected
@@ -1281,6 +1316,7 @@ function TimeWidget(
       .get(brushes.getBrushGroupSelected()).name;
     divOverview.value.asArray = (params) =>
       convertBrushMapToArray(value, params);
+      divOverview.value.getColor = (groupName) => brushesColorScale(divOverview.value.status.get(groupName).id);
     divOverview.extent = {
       x: overviewX.domain(),
       y: overviewY.domain(),
@@ -1383,48 +1419,33 @@ function TimeWidget(
         x(d) !== null
     );
 
-    let xDataType = typeof x(fData[0]);
+      let xDataType = typeof x(fData[0]);
 
-    initDomains({ xDataType, fData });
+      initDomains({xDataType, fData});
 
-    fData = fData.filter(
-      (d) => !isNaN(overviewX(x(d))) && !isNaN(overviewY(y(d)))
-    );
+      fData = fData.filter(
+          (d) => !isNaN(overviewX(x(d))) && !isNaN(overviewY(y(d)))
+      );
 
-    groupedData = d3.groups(fData, id);
+      groupedData = d3.groups(fData, id);
 
-    groupedData.map((d) => [
-      d[0],
-      d[1].sort((a, b) => d3.ascending(x(a), x(b))),
-    ]);
+      groupedData.map((d) => [
+          d[0],
+          d[1].sort((a, b) => d3.ascending(x(a), x(b))),
+      ]);
 
-    ts.alphaScale.domain([0, groupedData.length]);
+      ts.alphaScale.domain([0, groupedData.length]);
 
-    // Limit the number of timelines
-    if (maxTimelines) groupedData = groupedData.slice(0, maxTimelines);
+      // Limit the number of timelines
+      if (ts.maxTimelines) groupedData = groupedData.slice(0, ts.maxTimelines);
+
+
     init();
-
-    timelineOverview.setScales({
-      scaleX: overviewX,
-      scaleY: overviewY,
-    });
-    timelineOverview.data(groupedData);
-
-    initDetails({ overviewX, overviewY });
-
-    dataSelected.set(0, []);
-    renderSelected = dataSelected;
-    dataNotSelected = groupedData;
-    renderNotSelected = dataNotSelected;
-
-    if (_this) brushes.addFilters(_this.value.status, true);
-    else if (filters) brushes.addFilters(filters, true);
-
     onSelectionChange();
   };
 
   // If we receive the data on initialization call ts.Data
-  if (data && x && y && id) {
+    if (data && ts.x && ts.y && ts.id) {
     ts.data(data);
   } else {
     overviewX = d3
@@ -1439,9 +1460,7 @@ function TimeWidget(
     init();
   }
 
-  if (referenceCurves) {
-    ts.addReferenceCurves(referenceCurves);
-  }
+
 
   // To allow a message from the outside to rerender
   ts.render = () => {
@@ -1449,10 +1468,19 @@ function TimeWidget(
     onSelectionChange();
   };
 
+    ts.update = () => {
+        let status = divOverview.value.status;
+        let xDataType = typeof x(fData[0]);
+        initDomains({xDataType, fData});
+        init();
+        brushes.addFilters(status, true);
+    };
+
   // Remove possible previous event listener
   //target.removeEventListener("TimeWidget", onTimeWidgetEvent);
 
-  // Make the ts object accessible
+
+    // Make the ts object accessible
   divOverview.ts = ts;
   divOverview.details = detailsElement;
   divOverview.brushesCoordinates = brushesCoordinatesElement;
