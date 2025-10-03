@@ -7,7 +7,7 @@
   },
   "license": "MIT",
   "name": "time-widget",
-  "version": "0.0.26",
+  "version": "0.0.27",
   "type": "module",
   "main": "dist/TimeWidget.min.js",
   "exports": "dist/TimeWidget.min.js",
