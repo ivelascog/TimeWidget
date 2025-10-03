@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TimeWidget Weather</title>
+</head>
+<body>
+<div id="TimeWidget" style="float: left"></div>
+<div id="LineWidget"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script src="https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6"></script>
+<script src="../dist/TimeWidget.js"></script>
+<script type="module">
+    d3.csv("./Weather.csv", d3.autoType).then((data) => {
+
+        let selected = TimeWidget(data, {
+            target: d3.select("#TimeWidget").node(),
+            x: "DATE",
+            y: "TG",
+            id: "STAID",
+            showGroupMedian: false,
+            xLabel: "Date",
+            yLabel: "Temper Cº",
+        });
+
+        selected.addEventListener("input", () => makePlot());
+
+        makePlot()
+
+        function makePlot() {
+            let plot = Plot.plot({
+                marks: [
+                    Plot.ruleY([0]),
+                    Plot.lineY(selected.value, {
+                        x: "DATE",
+                        y: "RR",
+                        z: "STAID",
+                        strokeOpacity: 0.6,
+                        stroke: (d) => selected.value.getColor(d.tw_group)
+                    })
+                ]
+            });
+
+            const div = document.querySelector("#LineWidget")
+            if (div.firstChild) div.replaceChild(plot, div.firstChild);
+            else div.append(plot)
+        }
+
+    });
+
+
+</script>
+</body>
+</html>
