@@ -3,7 +3,7 @@ import { throttle } from "throttle-debounce";
 import BVH from "./BVH";
 import brushTooltipEditable from "./BrushTooltipEditable.js";
 import BrushContextMenu from "./BrushContextMenu.js";
-import { compareSets, darken, isInsideDomain } from "./utils.js";
+import {compareSets, darken, isInsideDomain, logPerformance} from "./utils.js";
 
 import { BrushAggregation, BrushModes, log } from "./utils";
 
@@ -224,6 +224,7 @@ function brushInteraction({
 
   // Update brush intersections when moved
   function brushed({ selection, sourceEvent }, brush) {
+      logPerformance();
     //log("brushed", brush, arguments);
     if (!brush[1]) {
       // TODO

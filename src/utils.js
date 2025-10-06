@@ -1,11 +1,30 @@
 import * as d3 from "d3";
 
-let DEBUG = true;
+let DEBUG = false;
+let PERFORMANCE = true;
 let before = 0;
+let beforePerformance = 0;
+let performanceDeltas = [];
+
 
 export function log() {
   if (DEBUG) console.log(performance.now() - before, ...arguments);
   before = performance.now();
+}
+
+export function logPerformance(print) {
+    if (PERFORMANCE) {
+        if (print) {
+            let delta = performance.now() - beforePerformance;
+            if (delta > 400) return; //Init Time
+            console.log(delta, "FrameTime");
+            performanceDeltas.push(delta);
+            if(performanceDeltas.length % 10 === 0) {
+                console.log(`Median Performance in ${performanceDeltas.length} samples is ${d3.mean(performanceDeltas)}`);
+            }
+        }
+        beforePerformance = performance.now();
+    }
 }
 
 export function darken(color, k = 1) {

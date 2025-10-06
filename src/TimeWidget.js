@@ -1,7 +1,7 @@
 ﻿import * as d3 from "d3";
 import {add, intervalToDuration, sub} from "date-fns";
 
-import {log} from "./utils.js";
+import {log, logPerformance} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -1323,6 +1323,7 @@ function TimeWidget(
     };
     divOverview.brushGroups = brushes.getBrushesGroup();
     updateStatus();
+    logPerformance("FrameTime");
   }
 
   /*function brushesToDomain(brushesGroup) {

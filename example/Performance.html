@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TimeWidget Performance</title>
+</head>
+<body>
+    <form>
+        <label for="lines">Nº of TimeLines</label>
+        <input type="number" min="0" value="100" step="1" id="lines">
+        <label for="pointsPerLines">Points per Lines</label>
+        <input type="number" min="0" step="1" value="10" id="pointsPerLines">
+        <label for="result">TotalPoints</label>
+        <output for="lines pointsPerLines" id="result"></output>
+    </form>
+    <div id="chart"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/seedrandom@3.0.5/seedrandom.min.js"></script>
+    <script src="../dist/TimeWidget.js"></script>
+
+    <script>
+        let initTime = 0;
+        let finTime = 0;
+
+        let linesElement = document.querySelector('#lines');
+        let pointsElement = document.querySelector('#pointsPerLines');
+        let resultElement = document.querySelector('#result');
+        updateTotalPoints();
+
+
+
+        let target = TimeWidget(generateData(linesElement.value,pointsElement.value),{
+            target: document.getElementById("chart"),
+            x: "xCoord",
+            y: "yCoord",
+            id: "id"
+        });
+
+        linesElement.addEventListener('change', e => {
+            target.ts.data(generateData(linesElement.value,pointsElement.value));
+            updateTotalPoints()
+        });
+        pointsElement.addEventListener('change', e => {
+            target.ts.data(generateData(pointsElement.value,pointsElement.value))
+            updateTotalPoints()
+            ;});
+
+        function updateTotalPoints() {
+            resultElement.value = linesElement.value * pointsElement.value;
+        }
+
+        function calculateFrameTime () {
+            finTime = performance.now();
+            frameTimeElement.textContent = `Frame Time: ${finTime - initTime.toFixed(2)} ms`
+            initTime = performance.now();
+
+        }
+
+        function generateData(lines, pointsPerLines) {
+            Math.seedrandom('Seed'); // Reseed to obtain equal values beetween executions of the function
+            let data = [];
+            for (let i = 0; i < lines; i++) {
+                for (let j = 0; j < pointsPerLines; j++) {
+                    data.push({
+                        id: i,
+                        xCoord: Math.random() * 100,
+                        yCoord: Math.random() * 100,
+                    })
+                }
+            }
+            return data;
+        }
+
+    </script>
+</body>
+</html>
