@@ -294,7 +294,10 @@ TimeWidget.js is licensed under the MIT license. (http://opensource.org/licenses
 
 ## Contributors
 
-These research tools are the result of a collaboration between  Universidad Rey Juan Carlos in Madrid (Iván Velasco, Sofía Bayona and Luis Pastor), The Kangaroo Foundation in Colombia (Nathalie Charpak, José Tiberio Hernández), and Norhteastern University in Silicon Valley (John Alexis Guerra) 
 
+These research tools are the result of a collaboration between: 
+* Universidad Rey Juan Carlos in Madrid (Iván Velasco, Sofía Bayona and Luis Pastor)
+* The Kangaroo Foundation in Colombia (Nathalie Charpak, José Tiberio Hernández)
+* Norhteastern University in Sillicon Valley ([John Alexis Guerra Gomez](https://johnguerra.co)) 
 
 
