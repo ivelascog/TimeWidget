@@ -19,7 +19,7 @@ export function logPerformance(print) {
             if (delta > 400) return; //Init Time
             console.log(delta, "FrameTime");
             performanceDeltas.push(delta);
-            if(performanceDeltas.length % 10 === 0) {
+            if (performanceDeltas.length % 100 === 0) {
                 console.log(`Median Performance in ${performanceDeltas.length} samples is ${d3.mean(performanceDeltas)}`);
             }
         }
