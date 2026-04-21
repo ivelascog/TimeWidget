@@ -54,10 +54,10 @@ export function isInsideDomain(domain, scaleX, scaleY) {
   let domainY = [domain[1][1], domain[0][1]];
 
   return (
-    domainX[0] > scaleXDomain[0] &&
-    domainX[1] < scaleXDomain[1] &&
-    domainY[0] > scaleYDomain[0] &&
-    domainY[1] < scaleYDomain[1]
+      domainX[0] >= scaleXDomain[0] &&
+      domainX[1] <= scaleXDomain[1] &&
+      domainY[0] >= scaleYDomain[0] &&
+      domainY[1] <= scaleYDomain[1]
   );
 }
 
@@ -68,5 +68,5 @@ export const BrushModes = Object.freeze({
 
 export const BrushAggregation = Object.freeze({
   And: "and",
-  Or: "OR",
+    Or: "or",
 });

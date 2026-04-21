@@ -779,8 +779,7 @@ function TimeWidget(
       .attr("min", hasScaleTime ? fmtX(domainX[0]) : domainX[0])
       .attr("max", hasScaleTime ? fmtX(domainX[1]) : domainX[1])
       .attr("step", ts.stepX)
-      .attr("width", "50%")
-      // .style("background-color", ts.backgroundColor)
+        .style("width", "100%")
       .on("change", onSpinboxChange);
 
     let x1 = divInputX
@@ -789,9 +788,8 @@ function TimeWidget(
       .attr("type", hasScaleTime ? "Date" : "number")
       .attr("min", hasScaleTime ? fmtX(domainX[0]) : domainX[0])
       .attr("max", hasScaleTime ? fmtX(domainX[1]) : domainX[1])
-      .attr("width", "50%")
       .attr("step", ts.stepX)
-      // .style("background-color", ts.backgroundColor)
+        .style("width", "100%")
       .on("change", onSpinboxChange);
 
     let divY = selection.append("div");
@@ -808,9 +806,8 @@ function TimeWidget(
       .attr("type", "number")
       .attr("min", domainY[0])
       .attr("max", domainY[1])
-      .attr("width", "50%")
       .attr("step", ts.stepY)
-      // .style("background-color", ts.backgroundColor)
+        .style("width", "100%")
       .on("change", onSpinboxChange);
 
     let y1 = divInputY
@@ -819,9 +816,8 @@ function TimeWidget(
       .attr("type", "number")
       .attr("min", domainY[0])
       .attr("max", domainY[1])
-      .attr("width", "50%")
       .attr("step", ts.stepY)
-      // .style("background-color", ts.backgroundColor)
+        .style("width", "100%")
       .on("change", onSpinboxChange);
 
     brushSpinBoxes = [
@@ -832,7 +828,7 @@ function TimeWidget(
     if (showBrushesCoordinates) {
       selection
         .insert("h3", ":first-child")
-        .text("Current TimeBox Coordinates:");
+          .text("Coordinates:");
       divControls.appendChild(brushesCoordinatesElement);
     }
   }
