@@ -1,11 +1,11 @@
 import * as d3 from "d3";
-import { throttle } from "throttle-debounce";
+import {throttle} from "throttle-debounce";
 import BVH from "./BVH";
 import brushTooltipEditable from "./BrushTooltipEditable.js";
 import BrushContextMenu from "./BrushContextMenu.js";
 import {compareSets, darken, isInsideDomain, logPerformance} from "./utils.js";
 
-import { BrushAggregation, BrushModes, log } from "./utils";
+import {BrushAggregation, BrushModes, log} from "./utils";
 
 function brushInteraction({
   ts,
@@ -60,7 +60,7 @@ function brushInteraction({
   tSelectionCall = throttle(50, updateSelectedCoordinates);
 
   dataSelected = new Map();
-  dataNotSelected = [];
+  dataNotSelected = data;
   brushesGroup = new Map();
   brushCount = 0;
   brushSize = 0;
