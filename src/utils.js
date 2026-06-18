@@ -70,3 +70,16 @@ export const BrushAggregation = Object.freeze({
   And: "and",
     Or: "or",
 });
+
+// Normalize a numeric [lo, hi] domain: order endpoints, widen a zero-width
+// interval by eps. Non-numeric domains (e.g. Dates) and malformed input pass
+// through unchanged so the scaleTime path is never broken.
+export function normalizeDomain(domain, { eps = 1e-6 } = {}) {
+  if (!Array.isArray(domain) || domain.length !== 2) return domain;
+  let [lo, hi] = domain;
+  if (typeof lo !== "number" || typeof hi !== "number") return domain;
+  if (Number.isNaN(lo) || Number.isNaN(hi)) return domain;
+  if (lo > hi) [lo, hi] = [hi, lo];
+  if (lo === hi) hi = lo + eps;
+  return [lo, hi];
+}
