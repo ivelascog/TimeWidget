@@ -1,7 +1,7 @@
 ﻿import * as d3 from "d3";
 import {add, intervalToDuration, sub} from "date-fns";
 
-import {log, logPerformance} from "./utils.js";
+import {log, logPerformance, normalizeDomain} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -223,11 +223,15 @@ function TimeWidget(
     <div id="brushesList">
     </div>
     <button id="btnAddBrushGroup">Add Group</button>
+    <button id="btnDuplicateBrushGroup">Duplicate Group</button>
     </div>`;
 
     groupsElement
       .querySelector("button#btnAddBrushGroup")
       .addEventListener("click", onAddBrushGroup);
+    groupsElement
+      .querySelector("button#btnDuplicateBrushGroup")
+      .addEventListener("click", onDuplicateBrushGroup);
 
     if (showBrushesControls) {
       d3.select(groupsElement).insert("h3", ":first-child").text("Groups:");
@@ -241,6 +245,10 @@ function TimeWidget(
 
   function onAddBrushGroup() {
     brushes.addBrushGroup();
+  }
+
+  function onDuplicateBrushGroup() {
+    brushes.duplicateBrushGroup();
   }
 
   function onChangeNonSelected(newState) {
@@ -415,8 +423,8 @@ function TimeWidget(
   }
 
   function initDomains({ xDataType, fData }) {
-    if (!xDomain) {
-      xDomain = fixAxis && _this ? _this.extent.x : d3.extent(fData, x); // Keep same axes as in the first rendering
+    if (!ts.xDomain) {
+      ts.xDomain = fixAxis && _this ? _this.extent.x : d3.extent(fData, x); // Keep same axes as in the first rendering
     }
 
     overviewX = xScale ? xScale.copy() : undefined;
@@ -425,7 +433,7 @@ function TimeWidget(
       // X is Date
       hasScaleTime = true;
       if (!overviewX) overviewX = d3.scaleTime();
-      overviewX.domain(xDomain);
+      overviewX.domain(ts.xDomain);
       if (!fmtX) {
         // It is a function of type d3.timeFormat. I don't like the way to check that it is a function of that type, but I don't know a better one.
         fmtX = d3.timeFormat("%Y-%m-%d");
@@ -441,7 +449,7 @@ function TimeWidget(
       // if (xDataType === "number") {
       // X is number
       if (!overviewX) overviewX = d3.scaleLinear();
-      overviewX.domain(xDomain);
+      overviewX.domain(ts.xDomain);
       if (!fmtX) {
         fmtX = d3.format(".1f");
       }
@@ -461,6 +469,11 @@ function TimeWidget(
       .range([height - ts.margin.top - ts.margin.bottom, 0])
       .nice()
       .clamp(true);
+
+    // Full data extent captured once, before any zoom narrows the domains.
+    if (!ts.fullExtent) {
+      ts.fullExtent = { x: d3.extent(fData, x), y: d3.extent(fData, y) };
+    }
   }
 
   function init() {
@@ -1472,6 +1485,18 @@ function TimeWidget(
         init();
         brushes.addFilters(status, true);
     };
+
+  ts.setDomains = ({ x, y } = {}) => {
+    if (x) ts.xDomain = normalizeDomain(x);
+    if (y) ts.yDomain = normalizeDomain(y);
+    ts.update();
+    return ts;
+  };
+
+  ts.duplicateSelectedGroup = () => {
+    brushes.duplicateBrushGroup();
+    return ts;
+  };
 
   // Remove possible previous event listener
   //target.removeEventListener("TimeWidget", onTimeWidgetEvent);

@@ -702,6 +702,22 @@ function brushInteraction({
     updateGroups();
   };
 
+  me.duplicateBrushGroup = function (sourceId = brushGroupSelected) {
+    const source = brushesGroup.get(sourceId);
+    if (!source) return;
+    const payload = cloneBrushGroupPayload(source);
+    if (payload.brushes.length === 0) {
+      me.addBrushGroup(); // nothing committed → behave like Add Group
+      return;
+    }
+    const before = new Set(brushesGroup.keys());
+    me.addFilters([payload], false); // appends a new group, materializes copied brushes
+    const newId = [...brushesGroup.keys()].find((k) => !before.has(k));
+    if (newId !== undefined) selectBrushGroup(newId);
+    updateStatus();
+    updateGroups();
+  };
+
   me.changeBrushGroupState = function (id, newState) {
     if (brushesGroup.get(id).isEnable === newState) return; //same state so no update needed
 
@@ -1071,6 +1087,29 @@ function brushInteraction({
   drawBrushes();
 
   return me;
+}
+
+// Pure: build the payload that me.addFilters() consumes, from a brush group's
+// committed brushes (those with a non-null selection). No d3/DOM references.
+export function cloneBrushGroupPayload(group, { suffix = " (copy)" } = {}) {
+  const brushes = [];
+  if (group && group.brushes) {
+    for (const brush of group.brushes.values()) {
+      if (brush.selection !== null && brush.selectionDomain) {
+        brushes.push({
+          mode: brush.mode,
+          aggregation: brush.aggregation,
+          selectionDomain: brush.selectionDomain,
+        });
+      }
+    }
+  }
+  return {
+    isEnable: true,
+    isActive: false,
+    name: ((group && group.name) || "Group") + suffix,
+    brushes,
+  };
 }
 
 export default brushInteraction;
