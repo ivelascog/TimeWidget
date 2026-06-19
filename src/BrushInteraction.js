@@ -1028,14 +1028,18 @@ function brushInteraction({
 
       for (const brush of group.brushes) {
         if (!isInsideDomain(brush.selectionDomain, scaleX, scaleY)) {
-          // If the provided domain is out of bounds use the pixel selection. If not, set default value.
-          if (brush.selection)
-            brush.selectionDomain = getSelectionDomain(brush.selection);
-          else
-            brush.selectionDomain = getSelectionDomain([
-              [0, 100],
-              [0, 100],
-            ]);
+          // Keep the canonical data-domain selection so the brush stays anchored
+          // to its data range when the domain changes (e.g. zoom). The brush extent
+          // clips the rendered pixels to the viewport, and zooming back out restores
+          // the full selection. Only fall back when there is no usable domain at all.
+          if (!brush.selectionDomain) {
+            brush.selectionDomain = brush.selection
+              ? getSelectionDomain(brush.selection)
+              : getSelectionDomain([
+                  [0, 100],
+                  [0, 100],
+                ]);
+          }
         }
         newBrush(brush.mode, brush.aggregation, groupId, brush.selectionDomain);
         brushSize++; // The brushSize will not be increased in onStartBrush
