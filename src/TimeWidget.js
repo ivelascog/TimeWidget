@@ -717,9 +717,10 @@ function TimeWidget(
       if (_this) brushes.addFilters(_this.value.status, true);
       else if (filters) brushes.addFilters(filters, true);
 
-      if (referenceCurves) {
-          ts.addReferenceCurves(referenceCurves);
-      }
+      // Seed from the constructor option once, then always redraw stored curves
+      // against the freshly-built scales so they track zoom (setDomains -> init).
+      if (referenceCurves && !ts._referenceCurves) ts._referenceCurves = referenceCurves;
+      renderReferenceCurves();
 
       return g;
   }
@@ -1187,8 +1188,13 @@ function TimeWidget(
       }
       for (let line of g[1]) {
         for (let point of line[1]) {
-          let i = Math.floor((x(point) - minX) / binW);
-          i = i > ts.medianNumBins - 1 ? i - 1 : i;
+          let px = x(point);
+          // Skip points outside the (possibly zoomed) X domain: when zoomed in,
+          // data extends past [minX, maxX] and would index outside `bins`.
+          if (px < minX || px > maxX) continue;
+          let i = Math.floor((px - minX) / binW);
+          // Clamp to a valid bin (guards the right edge where px === maxX).
+          i = Math.max(0, Math.min(ts.medianNumBins - 1, i));
           bins[i].data.push(y(point));
         }
       }
@@ -1359,25 +1365,26 @@ function TimeWidget(
     } */
 
   ts.addReferenceCurves = function (curves) {
-    if (!overviewX) return;
     if (!Array.isArray(curves)) {
       throw new Error("The reference curves must be an array of Objects");
     }
-    let domainX = overviewX.domain();
-    let domainY = overviewY.domain();
+    // Store the originals (do NOT mutate) so curves can be re-projected on every
+    // domain change (e.g. zoom via setDomains). renderReferenceCurves clips a copy
+    // to the current domain at draw time.
+    ts._referenceCurves = curves;
+    renderReferenceCurves();
+    return ts;
+  };
 
-    curves.forEach((c) => {
-      c.data.sort((a, b) => d3.ascending(x(a), x(b)));
-      c.data = c.data.filter(
-        (p) =>
-          p[0] >= domainX[0] &&
-          p[0] <= domainX[1] &&
-          p[1] >= domainY[0] &&
-          p[1] <= domainY[1]
-      );
-    });
-
-    let line2 = d3
+  // Draw the stored reference curves against the CURRENT scales, clipping a copy
+  // to the current domain. Non-destructive: the stored curve data is never mutated,
+  // so zooming out restores points that a narrower domain had hidden.
+  function renderReferenceCurves() {
+    const curves = ts._referenceCurves;
+    if (!curves || !overviewX || !gReferences) return;
+    const domainX = overviewX.domain();
+    const domainY = overviewY.domain();
+    const line2 = d3
       .line()
       .defined((d) => d[1] !== undefined && d[1] !== null)
       .x((d) => overviewX(d[0]))
@@ -1388,12 +1395,24 @@ function TimeWidget(
       .data(curves)
       .join("path")
       .attr("class", "referenceCurve")
-      .attr("d", (c) => line2(c.data))
+      .attr("d", (c) =>
+        line2(
+          c.data
+            .filter(
+              (p) =>
+                p[0] >= domainX[0] &&
+                p[0] <= domainX[1] &&
+                p[1] >= domainY[0] &&
+                p[1] <= domainY[1]
+            )
+            .sort((a, b) => d3.ascending(a[0], b[0]))
+        )
+      )
       .attr("stroke-width", 2)
       .style("fill", "none")
       .style("stroke", (c) => c.color)
       .style("opacity", (c) => c.opacity);
-  };
+  }
 
   ts.updateCallback = function (_) {
     return arguments.length ? ((updateCallback = _), ts) : updateCallback;
