@@ -81,9 +81,9 @@ export function normalizeDomain(domain, extent, {eps = 1e-6} = {}) {
     if (Number.isNaN(lo) || Number.isNaN(hi)) return domain;
     if (lo > hi) [lo, hi] = [hi, lo];
     if (lo === hi) hi = lo + eps;
-    if (lo < extent[0]) lo = extent[0];
-    if (hi < extent[0]) hi = extent[0] + eps;
-    if (hi > extent[1]) hi = extent[1];
-    if (lo > extent[1]) lo = extent[1] - eps;
+    if (lo <= extent[0]) lo = extent[0];
+    if (hi <= extent[0]) hi = extent[0] + eps;
+    if (hi >= extent[1]) hi = extent[1];
+    if (lo >= extent[1]) lo = extent[1] - eps;
     return [lo, hi];
 }

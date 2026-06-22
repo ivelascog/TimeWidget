@@ -11,9 +11,9 @@ test("swaps reversed endpoints", () => {
 test("Values outside the extend", () => {
   let eps = 1e-6;
   expect(normalizeDomain([10, 40], [20, 30],)).toEqual([20, 30]);
-  let [lo, hi] = normalizeDomain([40, 50], [20, 30], {eps: eps});
-  expect(hi).toBe(30);
-  expect(lo).toBeCloseTo(30 - eps, 9);
+  let [lo, hi] = normalizeDomain([40, 50], [30, 40], {eps: eps});
+  expect(hi).toBe(40);
+  expect(lo).toBeCloseTo(40 - eps, 9);
   [lo, hi] = normalizeDomain([10, 20], [20, 30], {eps: eps});
   expect(hi).toBeCloseTo(20 + eps, 9);
   expect(lo).toBe(20);
