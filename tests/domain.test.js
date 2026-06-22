@@ -1,17 +1,29 @@
-import { normalizeDomain } from "../src/utils.js";
+import {normalizeDomain} from "../src/utils.js";
 
 test("passes through an already-valid numeric domain", () => {
-  expect(normalizeDomain([10, 40])).toEqual([10, 40]);
+  expect(normalizeDomain([10, 40], [0, 50])).toEqual([10, 40]);
 });
 
 test("swaps reversed endpoints", () => {
-  expect(normalizeDomain([40, 10])).toEqual([10, 40]);
+  expect(normalizeDomain([40, 10], [0, 50])).toEqual([10, 40]);
 });
 
-test("widens equal endpoints by eps", () => {
-  const [lo, hi] = normalizeDomain([20, 20], { eps: 1e-6 });
+test("Values outside the extend", () => {
+  let eps = 1e-6;
+  expect(normalizeDomain([10, 40], [20, 30],)).toEqual([20, 30]);
+  let [lo, hi] = normalizeDomain([40, 50], [20, 30], {eps: eps});
+  expect(hi).toBe(30);
+  expect(lo).toBeCloseTo(30 - eps, 9);
+  [lo, hi] = normalizeDomain([10, 20], [20, 30], {eps: eps});
+  expect(hi).toBeCloseTo(20 + eps, 9);
   expect(lo).toBe(20);
-  expect(hi).toBeCloseTo(20 + 1e-6, 9);
+
+});
+test("widens equal endpoints by eps", () => {
+  let eps = 1e-6;
+  const [lo, hi] = normalizeDomain([20, 20], [0, 50], {eps: eps});
+  expect(lo).toBe(20);
+  expect(hi).toBeCloseTo(20 + eps, 9);
 });
 
 test("passes non-numeric (e.g. Date) domains through untouched", () => {

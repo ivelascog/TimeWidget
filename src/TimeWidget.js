@@ -1479,8 +1479,8 @@ function TimeWidget(
     };
 
   ts.setDomains = ({ x, y } = {}) => {
-    if (x) ts.xDomain = normalizeDomain(x);
-    if (y) ts.yDomain = normalizeDomain(y);
+      if (x) ts.xDomain = normalizeDomain(x, ts.fullExtent);
+      if (y) ts.yDomain = normalizeDomain(y, ts.fullExtent);
     ts.update();
     return ts;
   };
