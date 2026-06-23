@@ -26,12 +26,22 @@ test("widens equal endpoints by eps", () => {
   expect(hi).toBeCloseTo(20 + eps, 9);
 });
 
-test("passes non-numeric (e.g. Date) domains through untouched", () => {
-  const d = [new Date(2020, 0, 1), new Date(2020, 1, 1)];
-  expect(normalizeDomain(d)).toBe(d);
-});
-
 test("passes through malformed input", () => {
   expect(normalizeDomain(null)).toBe(null);
-  expect(normalizeDomain([1])).toEqual([1]);
+  expect(normalizeDomain([1])).toEqual(null);
+});
+
+test("swaps reversed endpoints date", () => {
+  let domain = normalizeDomain([new Date("2026-3-1"), new Date("2026-2-1")],
+      [new Date("2026-1-1"), new Date("2026-4-1")]);
+  expect(domain).toEqual([new Date("2026-2-1"), new Date("2026-3-1")]);
+});
+
+test("widens equal endpoints by eps DATE", () => {
+  let eps = 1e-6;
+  const [lo, hi] = normalizeDomain([new Date("2026-3-1"), new Date("2026-3-1")],
+      [new Date("2026-1-1"), new Date("2026-4-1")], {eps: eps});
+  expect(lo).toEqual(new Date("2026-3-1"));
+  let diff = Math.abs(hi - new Date(new Date("2026-3-1").getTime() + eps));
+  expect(diff).toBeLessThanOrEqual(100);
 });
