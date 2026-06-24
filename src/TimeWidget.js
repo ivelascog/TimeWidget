@@ -1,7 +1,7 @@
 ﻿import * as d3 from "d3";
 import {add, intervalToDuration, sub} from "date-fns";
 
-import {log, logPerformance} from "./utils.js";
+import {log, logPerformance, normalizeDomain} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -415,8 +415,8 @@ function TimeWidget(
   }
 
   function initDomains({ xDataType, fData }) {
-    if (!xDomain) {
-      xDomain = fixAxis && _this ? _this.extent.x : d3.extent(fData, x); // Keep same axes as in the first rendering
+    if (!ts.xDomain) {
+      ts.xDomain = fixAxis && _this ? _this.extent.x : d3.extent(fData, x); // Keep same axes as in the first rendering
     }
 
     overviewX = xScale ? xScale.copy() : undefined;
@@ -425,7 +425,7 @@ function TimeWidget(
       // X is Date
       hasScaleTime = true;
       if (!overviewX) overviewX = d3.scaleTime();
-      overviewX.domain(xDomain);
+      overviewX.domain(ts.xDomain);
       if (!fmtX) {
         // It is a function of type d3.timeFormat. I don't like the way to check that it is a function of that type, but I don't know a better one.
         fmtX = d3.timeFormat("%Y-%m-%d");
@@ -441,7 +441,7 @@ function TimeWidget(
       // if (xDataType === "number") {
       // X is number
       if (!overviewX) overviewX = d3.scaleLinear();
-      overviewX.domain(xDomain);
+      overviewX.domain(ts.xDomain);
       if (!fmtX) {
         fmtX = d3.format(".1f");
       }
@@ -460,7 +460,6 @@ function TimeWidget(
     overviewY
       .range([height - ts.margin.top - ts.margin.bottom, 0])
       .nice()
-      .clamp(true);
   }
 
   function init() {
@@ -476,8 +475,8 @@ function TimeWidget(
     timelineOverview = TimeLineOverview({
       ts,
       element: divRender.node(),
-      width: width,
-      height: height,
+        width: width - margin.left - margin.right,
+        height: height - margin.top - margin.bottom,
       x,
       y,
       groupAttr: color,
@@ -668,8 +667,6 @@ function TimeWidget(
       data: groupedData,
       tooltipTarget: divRender.node(),
       contextMenuTarget: divRender.node(),
-      width,
-      height,
       xPartitions,
       yPartitions,
       x,
@@ -1418,6 +1415,14 @@ function TimeWidget(
 
       let xDataType = typeof x(fData[0]);
 
+      // Full data extent captured once, before any zoom narrows the domains.
+      if (!ts.fullExtent) {
+          ts.fullExtent = {x: d3.extent(fData, x), y: d3.extent(fData, y)};
+      }
+
+      xDomain = normalizeDomain(xDomain, ts.extent);
+      yDomain = normalizeDomain(yDomain, ts.extent);
+
       initDomains({xDataType, fData});
 
       fData = fData.filter(
@@ -1452,8 +1457,7 @@ function TimeWidget(
     overviewY = d3
       .scaleLinear()
       .range([height - ts.margin.top - ts.margin.bottom, 0])
-      .nice()
-      .clamp(true);
+        .nice();
     init();
   }
 
@@ -1471,6 +1475,17 @@ function TimeWidget(
         initDomains({xDataType, fData});
         init();
         brushes.addFilters(status, true);
+    };
+
+  ts.setDomains = ({ x, y } = {}) => {
+      if (x) ts.xDomain = normalizeDomain(x, ts.fullExtent) || ts.xDomain;
+      if (y) ts.yDomain = normalizeDomain(y, ts.fullExtent) || ts.yDomain;
+    ts.update();
+    return ts;
+  };
+
+    ts.getExtent = () => {
+        return ts.fullExtent;
     };
 
   // Remove possible previous event listener
