@@ -460,7 +460,6 @@ function TimeWidget(
     overviewY
       .range([height - ts.margin.top - ts.margin.bottom, 0])
       .nice()
-      .clamp(true);
 
     // Full data extent captured once, before any zoom narrows the domains.
     if (!ts.fullExtent) {
@@ -481,8 +480,8 @@ function TimeWidget(
     timelineOverview = TimeLineOverview({
       ts,
       element: divRender.node(),
-      width: width,
-      height: height,
+        width: width - margin.left - margin.right,
+        height: height - margin.top - margin.bottom,
       x,
       y,
       groupAttr: color,
@@ -673,8 +672,6 @@ function TimeWidget(
       data: groupedData,
       tooltipTarget: divRender.node(),
       contextMenuTarget: divRender.node(),
-      width,
-      height,
       xPartitions,
       yPartitions,
       x,
@@ -1457,8 +1454,7 @@ function TimeWidget(
     overviewY = d3
       .scaleLinear()
       .range([height - ts.margin.top - ts.margin.bottom, 0])
-      .nice()
-      .clamp(true);
+        .nice();
     init();
   }
 
@@ -1479,11 +1475,15 @@ function TimeWidget(
     };
 
   ts.setDomains = ({ x, y } = {}) => {
-      if (x) ts.xDomain = normalizeDomain(x, ts.fullExtent);
-      if (y) ts.yDomain = normalizeDomain(y, ts.fullExtent);
+      if (x) ts.xDomain = normalizeDomain(x, ts.fullExtent) || ts.xDomain;
+      if (y) ts.yDomain = normalizeDomain(y, ts.fullExtent) || ts.yDomain;
     ts.update();
     return ts;
   };
+
+    ts.getExtent = () => {
+        return ts.fullExtent;
+    };
 
   // Remove possible previous event listener
   //target.removeEventListener("TimeWidget", onTimeWidgetEvent);

@@ -97,5 +97,7 @@ export function normalizeDomain(domain, extent, {eps = 1e-6} = {}) {
         } else {
             return [lo, hi];
         }
+    } else {
+        console.warn("Unsupported domain type");
     }
 }
