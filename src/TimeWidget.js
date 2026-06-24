@@ -460,11 +460,6 @@ function TimeWidget(
     overviewY
       .range([height - ts.margin.top - ts.margin.bottom, 0])
       .nice()
-
-    // Full data extent captured once, before any zoom narrows the domains.
-    if (!ts.fullExtent) {
-      ts.fullExtent = { x: d3.extent(fData, x), y: d3.extent(fData, y) };
-    }
   }
 
   function init() {
@@ -1419,6 +1414,14 @@ function TimeWidget(
     );
 
       let xDataType = typeof x(fData[0]);
+
+      // Full data extent captured once, before any zoom narrows the domains.
+      if (!ts.fullExtent) {
+          ts.fullExtent = {x: d3.extent(fData, x), y: d3.extent(fData, y)};
+      }
+
+      xDomain = normalizeDomain(xDomain, ts.extent);
+      yDomain = normalizeDomain(yDomain, ts.extent);
 
       initDomains({xDataType, fData});
 
