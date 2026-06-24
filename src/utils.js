@@ -70,3 +70,34 @@ export const BrushAggregation = Object.freeze({
   And: "and",
     Or: "or",
 });
+
+// Normalize a numeric [lo, hi] domain: order endpoints, widen a zero-width
+// interval by eps. Non-numeric domains (e.g. Dates) and malformed input pass
+// through unchanged so the scaleTime path is never broken.
+export function normalizeDomain(domain, extent, {eps = 1e-6} = {}) {
+    if (!Array.isArray(domain) || domain.length !== 2) return null;
+    let [lo, hi] = domain;
+    if (lo > hi) [lo, hi] = [hi, lo];
+    let isDate = false;
+    if (lo instanceof Date && hi instanceof Date) {
+        lo = lo.getTime();
+        hi = hi.getTime();
+        isDate = true;
+    }
+
+    if (typeof lo === "number" && typeof hi === "number") {
+        if (Number.isNaN(lo) || Number.isNaN(hi)) return null;
+        if (lo === hi) hi = lo + eps;
+        if (lo <= extent[0]) lo = extent[0];
+        if (hi <= extent[0]) hi = extent[0] + eps;
+        if (hi >= extent[1]) hi = extent[1];
+        if (lo >= extent[1]) lo = extent[1] - eps;
+        if (isDate) {
+            return [new Date(lo), new Date(hi)];
+        } else {
+            return [lo, hi];
+        }
+    } else {
+        console.warn("Unsupported domain type");
+    }
+}

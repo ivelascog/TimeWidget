@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+
+<body>
+<!-- target for the main Widget -->
+<h1>Stock Prices</h1>
+<div id="target"></div>
+<label for="domainX">Domain X</label>
+<input type="range" min="0" max="100" value="0" id="domainX">
+<label for="domainY">Domain Y</label><input type="range" min="0" max="100" value="0" id="domainY">
+
+<!-- Load the libraries -->
+<script src="https://d3js.org/d3.v7.js"></script>
+<script src="../dist/TimeWidget.js"></script>
+
+<script>
+    let data = [
+        {Date: new Date("01/01/2023"), Open: 250, id: "Apple", group: "Technology"},
+        {Date: new Date("01/02/2023"), Open: 240, id: "Apple", group: "Technology"},
+        {Date: new Date("01/03/2023"), Open: 260, id: "Apple", group: "Technology"},
+        {Date: new Date("01/04/2023"), Open: 250, id: "Apple", group: "Technology"},
+        {Date: new Date("01/05/2023"), Open: 220, id: "Apple", group: "Technology"},
+        {Date: new Date("01/06/2023"), Open: 260, id: "Apple", group: "Technology"},
+    ];
+
+    let ts = TimeWidget(
+        data,
+        {
+            x: "Date", // Attribute to show in the X axis (Note that it also supports functions)
+            y: "Open", // Attribute to show in the Y axis (Note that it also supports functions)
+            id: "stock", // Attribute to group the input data (Note that it also supports functions)
+        }
+    );
+
+    ts.addEventListener("input", () => {
+        console.log("Selected", ts.value);
+    });
+
+    document.getElementById("target").appendChild(ts);
+    domainx = document.getElementById("domainX");
+    console.log(ts.ts.getExtent());
+    domainx.min = ts.ts.getExtent().x[0].getTime();
+    domainx.max = ts.ts.getExtent().x[1].getTime();
+    domainx.value = domainx.max;
+
+    domainx.addEventListener("input", () => {
+        ts.ts.setDomains({x: [+domainx.min, +domainx.value]});
+    });
+
+    domainy = document.getElementById("domainY");
+    domainy.min = ts.ts.getExtent().y[0];
+    domainy.max = ts.ts.getExtent().y[1];
+    domainy.value = domainy.max;
+
+    domainy.addEventListener("input", () => {
+        ts.ts.setDomains({y: [+domainy.min, +domainy.value]});
+    });
+
+</script>
+</body>
+</html>
