@@ -61,6 +61,15 @@ export function isInsideDomain(domain, scaleX, scaleY) {
   );
 }
 
+export function clampToDomain(domain, xDomain, yDomain) {
+    let domainX = [domain[0][0], domain[1][0]];
+    let domainY = [domain[1][1], domain[0][1]];
+    domainX = normalizeDomain(domainX, xDomain, {eps: 0});
+    domainY = normalizeDomain(domainY, yDomain, {eps: 0});
+    return [[domainX[0], domainY[0]], [domainX[1], domainY[1]]];
+
+}
+
 export const BrushModes = Object.freeze({
   Intersect: "intersect",
   Contains: "contains",
