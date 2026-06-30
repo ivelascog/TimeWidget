@@ -223,11 +223,15 @@ function TimeWidget(
     <div id="brushesList">
     </div>
     <button id="btnAddBrushGroup">Add Group</button>
+    <button id="btnDuplicateBrushGroup">Duplicate Group</button>
     </div>`;
 
     groupsElement
       .querySelector("button#btnAddBrushGroup")
       .addEventListener("click", onAddBrushGroup);
+    groupsElement
+      .querySelector("button#btnDuplicateBrushGroup")
+      .addEventListener("click", onDuplicateBrushGroup);
 
     if (showBrushesControls) {
       d3.select(groupsElement).insert("h3", ":first-child").text("Groups:");
@@ -241,6 +245,10 @@ function TimeWidget(
 
   function onAddBrushGroup() {
     brushes.addBrushGroup();
+  }
+
+  function onDuplicateBrushGroup() {
+    brushes.duplicateBrushGroup();
   }
 
   function onChangeNonSelected(newState) {
@@ -1472,6 +1480,11 @@ function TimeWidget(
         init();
         brushes.addFilters(status, true);
     };
+
+  ts.duplicateSelectedGroup = () => {
+    brushes.duplicateBrushGroup();
+    return ts;
+  };
 
   // Remove possible previous event listener
   //target.removeEventListener("TimeWidget", onTimeWidgetEvent);
