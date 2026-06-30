@@ -61,6 +61,15 @@ export function isInsideDomain(domain, scaleX, scaleY) {
   );
 }
 
+export function clampToDomain(domain, xDomain, yDomain) {
+    let domainX = [domain[0][0], domain[1][0]];
+    let domainY = [domain[1][1], domain[0][1]];
+    domainX = normalizeDomain(domainX, xDomain, {eps: 0});
+    domainY = normalizeDomain(domainY, yDomain, {eps: 0});
+    return [[domainX[0], domainY[0]], [domainX[1], domainY[1]]];
+
+}
+
 export const BrushModes = Object.freeze({
   Intersect: "intersect",
   Contains: "contains",
@@ -70,3 +79,81 @@ export const BrushAggregation = Object.freeze({
   And: "and",
     Or: "or",
 });
+
+export function clipLine(points, xDomain) {
+    const out = [];
+    let started = false;
+    let [xmin, xmax] = xDomain;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const [x1, y1] = points[i];
+        const [x2, y2] = points[i + 1];
+
+        // fuera por la izquierda
+        if (x2 < xmin) continue;
+
+        // primer punto dentro: intersección con xmin
+        if (!started) {
+            if (x1 < xmin && x2 >= xmin) {
+                out.push([
+                    xmin,
+                    y1 + (y2 - y1) * (xmin - x1) / (x2 - x1)
+                ]);
+            }
+            started = true;
+        }
+
+        // si ya estamos dentro, añadimos puntos
+        if (x1 >= xmin && x1 <= xmax) {
+            out.push([x1, y1]);
+        }
+
+        // cortar por la derecha
+        if (x2 > xmax) {
+            out.push([
+                xmax,
+                y1 + (y2 - y1) * (xmax - x1) / (x2 - x1)
+            ]);
+            break;
+        }
+    }
+
+    // último punto si cae dentro
+    const last = points[points.length - 1];
+    if (last[0] >= xmin && last[0] <= xmax) {
+        out.push(last);
+    }
+
+    return out;
+}
+
+// Normalize a numeric [lo, hi] domain: order endpoints, widen a zero-width
+// interval by eps. Non-numeric domains (e.g. Dates) and malformed input pass
+// through unchanged so the scaleTime path is never broken.
+export function normalizeDomain(domain, extent, {eps = 1e-6} = {}) {
+    if (!Array.isArray(domain) || domain.length !== 2) return null;
+    let [lo, hi] = domain;
+    if (lo > hi) [lo, hi] = [hi, lo];
+    let isDate = false;
+    if (lo instanceof Date && hi instanceof Date) {
+        lo = lo.getTime();
+        hi = hi.getTime();
+        isDate = true;
+    }
+
+    if (typeof lo === "number" && typeof hi === "number") {
+        if (Number.isNaN(lo) || Number.isNaN(hi)) return null;
+        if (lo === hi) hi = lo + eps;
+        if (lo <= extent[0]) lo = extent[0];
+        if (hi <= extent[0]) hi = extent[0] + eps;
+        if (hi >= extent[1]) hi = extent[1];
+        if (lo >= extent[1]) lo = extent[1] - eps;
+        if (isDate) {
+            return [new Date(lo), new Date(hi)];
+        } else {
+            return [lo, hi];
+        }
+    } else {
+        console.warn("Unsupported domain type");
+    }
+}

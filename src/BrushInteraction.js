@@ -3,7 +3,7 @@ import {throttle} from "throttle-debounce";
 import BVH from "./BVH";
 import brushTooltipEditable from "./BrushTooltipEditable.js";
 import BrushContextMenu from "./BrushContextMenu.js";
-import {compareSets, darken, isInsideDomain, logPerformance} from "./utils.js";
+import {clampToDomain, compareSets, darken, isInsideDomain, logPerformance} from "./utils.js";
 
 import {BrushAggregation, BrushModes, log} from "./utils";
 
@@ -1028,15 +1028,29 @@ function brushInteraction({
 
       for (const brush of group.brushes) {
         if (!isInsideDomain(brush.selectionDomain, scaleX, scaleY)) {
-          // If the provided domain is out of bounds use the pixel selection. If not, set default value.
-          if (brush.selection)
-            brush.selectionDomain = getSelectionDomain(brush.selection);
-          else
-            brush.selectionDomain = getSelectionDomain([
-              [0, 100],
-              [0, 100],
-            ]);
+          brush.selectionDomain = clampToDomain(brush.selectionDomain, scaleX.domain(), scaleY.domain());
         }
+        //check min size
+        let [[x0, y0], [x1, y1]] = getSelectionPixels(brush.selectionDomain, brush.selectionPixels);
+        if (Math.abs(x0 - x1) < minBrushSize) {
+          if (x0 === 0) {
+            x1 = x0 + minBrushSize;
+          } else {
+            x0 = x1 - minBrushSize;
+          }
+          brush.selectionDomain = getSelectionDomain([[x0, y0], [x1, y1]]);
+        }
+
+        if (Math.abs(y0 - y1) < minBrushSize) {
+          console.log(y0);
+          if (y0 === 0) {
+            y1 = y0 + minBrushSize;
+          } else {
+            y0 = y1 - minBrushSize;
+          }
+          brush.selectionDomain = getSelectionDomain([[x0, y0], [x1, y1]]);
+        }
+
         newBrush(brush.mode, brush.aggregation, groupId, brush.selectionDomain);
         brushSize++; // The brushSize will not be increased in onStartBrush
         // because the last brush added will be the one set for a new Brush.
