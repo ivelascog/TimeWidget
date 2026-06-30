@@ -80,6 +80,53 @@ export const BrushAggregation = Object.freeze({
     Or: "or",
 });
 
+export function clipLine(points, xDomain) {
+    const out = [];
+    let started = false;
+    let [xmin, xmax] = xDomain;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        const [x1, y1] = points[i];
+        const [x2, y2] = points[i + 1];
+
+        // fuera por la izquierda
+        if (x2 < xmin) continue;
+
+        // primer punto dentro: intersección con xmin
+        if (!started) {
+            if (x1 < xmin && x2 >= xmin) {
+                out.push([
+                    xmin,
+                    y1 + (y2 - y1) * (xmin - x1) / (x2 - x1)
+                ]);
+            }
+            started = true;
+        }
+
+        // si ya estamos dentro, añadimos puntos
+        if (x1 >= xmin && x1 <= xmax) {
+            out.push([x1, y1]);
+        }
+
+        // cortar por la derecha
+        if (x2 > xmax) {
+            out.push([
+                xmax,
+                y1 + (y2 - y1) * (xmax - x1) / (x2 - x1)
+            ]);
+            break;
+        }
+    }
+
+    // último punto si cae dentro
+    const last = points[points.length - 1];
+    if (last[0] >= xmin && last[0] <= xmax) {
+        out.push(last);
+    }
+
+    return out;
+}
+
 // Normalize a numeric [lo, hi] domain: order endpoints, widen a zero-width
 // interval by eps. Non-numeric domains (e.g. Dates) and malformed input pass
 // through unchanged so the scaleTime path is never broken.

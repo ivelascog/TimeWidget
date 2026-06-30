@@ -459,7 +459,7 @@ function TimeWidget(
 
     overviewY
       .range([height - ts.margin.top - ts.margin.bottom, 0])
-      .nice()
+        .nice();
   }
 
   function init() {
@@ -529,6 +529,19 @@ function TimeWidget(
             break;
         }
       });
+
+      let clip = g.selectAll("#plotClip")
+          .data([1])
+          .join("clipPath")
+          .attr("id", "plotClip");
+
+      clip.selectAll("rect")
+          .data([1])
+          .join("rect")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("width", width - margin.right - margin.left)
+          .attr("height", height - margin.top - margin.bottom);
 
     let yAxis = d3.axisLeft(overviewY);
     if (yTicks) {
@@ -609,6 +622,7 @@ function TimeWidget(
       .data([1])
       .join("g")
       .attr("class", "gReferences")
+        .attr("clip-path", "url(#plotClip)")
       .style("pointer-events", "none");
 
     gmainY
@@ -1369,6 +1383,7 @@ function TimeWidget(
     // domain change (e.g. zoom via setDomains). renderReferenceCurves clips a copy
     // to the current domain at draw time.
     ts._referenceCurves = curves;
+      Object.values(ts._referenceCurves).forEach(({data}) => data.sort((a, b) => d3.ascending(a[0], b[0])));
     renderReferenceCurves();
     return ts;
   };
@@ -1379,8 +1394,6 @@ function TimeWidget(
   function renderReferenceCurves() {
     const curves = ts._referenceCurves;
     if (!curves || !overviewX || !gReferences) return;
-    const domainX = overviewX.domain();
-    const domainY = overviewY.domain();
     const line2 = d3
       .line()
       .defined((d) => d[1] !== undefined && d[1] !== null)
@@ -1392,19 +1405,7 @@ function TimeWidget(
       .data(curves)
       .join("path")
       .attr("class", "referenceCurve")
-      .attr("d", (c) =>
-        line2(
-          c.data
-            .filter(
-              (p) =>
-                p[0] >= domainX[0] &&
-                p[0] <= domainX[1] &&
-                p[1] >= domainY[0] &&
-                p[1] <= domainY[1]
-            )
-            .sort((a, b) => d3.ascending(a[0], b[0]))
-        )
-      )
+        .attr("d", (c) => line2(c.data))
       .attr("stroke-width", 2)
       .style("fill", "none")
       .style("stroke", (c) => c.color)
