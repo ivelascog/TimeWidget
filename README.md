@@ -223,6 +223,7 @@ This section will show all possible options grouped by categories.
  - **showGroupMedian**: If active show a line with the median of the enabled groups.
  - **hasDetails**: Determines whether detail data will be displayed or not. Disabling it saves preprocessing time if detail data is not to be displayed.
  - **doubleYlegend**: Allows the y-axis legend to be displayed on both sides of the chart.
+ - **showXAxis** / **showYAxis**: Default `true`. Set to `false` to skip drawing that axis (ticks, domain line and label). Useful when an external axis component — e.g. a zoomable axis overlaid on the chart edge — supplies the axis instead, so you don't get doubled ticks.
  - **showGrid**: If active, a reference grid is displayed.
  - **brushGroupSize**: Controls the size of the colored rectangles used to select the different brushGroups.
 ### Performance

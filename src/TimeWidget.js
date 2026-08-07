@@ -71,6 +71,8 @@ function TimeWidget(
     showGroupMedian = true, // If active show a line with the median of the enabled groups.
     hasDetails = false, // Determines whether detail data will be displayed or not. Disabling it saves preprocessing time if detail data is not to be displayed.
     doubleYlegend = false, // Allows the y-axis legend to be displayed on both sides of the chart.
+    showXAxis = true, // If false, the X axis (ticks, domain line and label) is not drawn. Useful when an external axis component (e.g. a zoomable axis) provides it.
+    showYAxis = true, // If false, the Y axis (ticks, domain line and label) is not drawn. Useful when an external axis component provides it.
     showGrid = false, // If active, a reference grid is displayed.
     brushGroupSize = 15, //Controls the size of the colored rectangles used to select the different brushGroups.
     /* Performance */
@@ -571,25 +573,33 @@ function TimeWidget(
         .tickFormat((d, i) => (yTicks[i][1] ? yTicks[i][1] : yTicks[i][0]));
     }
 
+    // Always create the group (the grid and other code reference it); only draw
+    // the axis + label when showYAxis. When hidden, clear any previous ticks so
+    // an external axis (e.g. a zoomable axis) can stand in without doubling.
     let gmainY = g
       .selectAll("g.mainYAxis")
       .data([1])
       .join("g")
       .attr("class", "mainYAxis")
-      .call(yAxis)
-      .call((axis) =>
-        axis
-          .selectAll("text.label")
-          .data([1])
-          .join("text")
-          .text(yLabel)
-          .attr("dy", -15)
-          .attr("class", "label")
-          .style("fill", "black")
-          .style("text-anchor", "end")
-          .style("pointer-events", "none")
-      )
       .style("pointer-events", "none");
+    if (showYAxis) {
+      gmainY
+        .call(yAxis)
+        .call((axis) =>
+          axis
+            .selectAll("text.label")
+            .data([1])
+            .join("text")
+            .text(yLabel)
+            .attr("dy", -15)
+            .attr("class", "label")
+            .style("fill", "black")
+            .style("text-anchor", "end")
+            .style("pointer-events", "none")
+        );
+    } else {
+      gmainY.selectAll("*").remove();
+    }
 
     if (ts.doubleYlegend) {
       g.selectAll("g.secondYaxis")
@@ -611,32 +621,39 @@ function TimeWidget(
         .tickFormat((d, i) => (xTicks[i][1] ? xTicks[i][1] : xTicks[i][0]));
     }
 
+    // The transform stays regardless (the grid's X gridlines position relative to
+    // this group); only the ticks + label are conditional on showXAxis.
     let gmainx = g
       .selectAll("g.mainXAxis")
       .data([1])
       .join("g")
       .attr("class", "mainXAxis")
-      .call(xAxis)
       .attr(
         "transform",
         `translate(0, ${height - ts.margin.top - ts.margin.bottom})`
       )
-      .call((axis) =>
-        axis
-          .selectAll("text.label")
-          .data([1])
-          .join("text")
-          .attr("class", "label")
-          .text(xLabel)
-          .attr(
-            "transform",
-            `translate(${width - ts.margin.right - ts.margin.left - 5}, -10 )`
-          )
-          .style("fill", "black")
-          .style("text-anchor", "end")
-          .style("pointer-events", "none")
-      )
       .style("pointer-events", "none");
+    if (showXAxis) {
+      gmainx
+        .call(xAxis)
+        .call((axis) =>
+          axis
+            .selectAll("text.label")
+            .data([1])
+            .join("text")
+            .attr("class", "label")
+            .text(xLabel)
+            .attr(
+              "transform",
+              `translate(${width - ts.margin.right - ts.margin.left - 5}, -10 )`
+            )
+            .style("fill", "black")
+            .style("text-anchor", "end")
+            .style("pointer-events", "none")
+        );
+    } else {
+      gmainx.selectAll("*").remove();
+    }
 
     gReferences = g
       .selectAll("g.gReferences")
