@@ -71,33 +71,69 @@ export const BrushAggregation = Object.freeze({
     Or: "or",
 });
 
-// Normalize a numeric [lo, hi] domain: order endpoints, widen a zero-width
-// interval by eps. Non-numeric domains (e.g. Dates) and malformed input pass
-// through unchanged so the scaleTime path is never broken.
-export function normalizeDomain(domain, extent, {eps = 1e-6} = {}) {
-    if (!Array.isArray(domain) || domain.length !== 2) return null;
-    let [lo, hi] = domain;
-    if (lo > hi) [lo, hi] = [hi, lo];
-    let isDate = false;
-    if (lo instanceof Date && hi instanceof Date) {
-        lo = lo.getTime();
-        hi = hi.getTime();
-        isDate = true;
-    }
+// Normalize a [lo, hi] domain against the axis's full data extent: order the
+// endpoints, widen a zero-width interval by eps, and clamp the result inside
+// extent. Numbers and Dates are both supported; a Date domain returns Dates.
+// Returns null for anything malformed, so callers can `|| fallback`.
+//
+// `extent` is a single axis pair, e.g. ts.fullExtent.x — NOT the whole
+// {x, y} object. Passing the object silently disabled clamping before, so a
+// bad extent now warns rather than quietly doing nothing.
+export function normalizeDomain(domain, extent, { eps = 1e-6 } = {}) {
+  if (!Array.isArray(domain) || domain.length !== 2) return null;
 
-    if (typeof lo === "number" && typeof hi === "number") {
-        if (Number.isNaN(lo) || Number.isNaN(hi)) return null;
-        if (lo === hi) hi = lo + eps;
-        if (lo <= extent[0]) lo = extent[0];
-        if (hi <= extent[0]) hi = extent[0] + eps;
-        if (hi >= extent[1]) hi = extent[1];
-        if (lo >= extent[1]) lo = extent[1] - eps;
-        if (isDate) {
-            return [new Date(lo), new Date(hi)];
-        } else {
-            return [lo, hi];
-        }
-    } else {
-        console.warn("Unsupported domain type");
-    }
+  let [lo, hi] = domain;
+  if (lo > hi) [lo, hi] = [hi, lo];
+
+  let isDate = false;
+  if (lo instanceof Date && hi instanceof Date) {
+    lo = lo.getTime();
+    hi = hi.getTime();
+    isDate = true;
+  }
+
+  if (typeof lo !== "number" || typeof hi !== "number") {
+    console.warn("normalizeDomain: unsupported domain type", domain);
+    return null;
+  }
+  if (Number.isNaN(lo) || Number.isNaN(hi)) return null;
+  if (lo === hi) hi = lo + eps;
+
+  let bounds = Array.isArray(extent) && extent.length === 2 ? extent : null;
+  if (extent !== undefined && !bounds) {
+    console.warn(
+      "normalizeDomain: expected an [lo, hi] extent pair, got",
+      extent,
+      "— skipping clamp"
+    );
+  }
+  if (bounds) {
+    let [min, max] = bounds.map((d) => (d instanceof Date ? d.getTime() : d));
+    if (lo <= min) lo = min;
+    if (hi <= min) hi = min + eps;
+    if (hi >= max) hi = max;
+    if (lo >= max) lo = max - eps;
+  }
+
+  return isDate ? [new Date(lo), new Date(hi)] : [lo, hi];
+}
+
+// Resolve a {x, y} pair of requested domains against the widget's full extent.
+// Takes the whole {x, y} extent object and does the per-axis lookup itself, so
+// a caller cannot hand normalizeDomain the wrong shape — the mistake that
+// silently disabled clamping in ts.setDomains(). An axis that is not requested,
+// or whose request is malformed, keeps its current domain.
+// NOTE: no `??` / `?.` here — the build's rollup-plugin-ascii bundles an old
+// acorn that cannot parse them, and rollup fails before Babel ever runs.
+export function resolveDomains(requested = {}, fullExtent = {}, current = {}) {
+  let resolved = {};
+  for (let axis of ["x", "y"]) {
+    let ask = requested[axis];
+    let next =
+      ask === undefined || ask === null
+        ? null
+        : normalizeDomain(ask, fullExtent[axis]);
+    resolved[axis] = next === null ? current[axis] : next;
+  }
+  return resolved;
 }

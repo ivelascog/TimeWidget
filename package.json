@@ -10,7 +10,10 @@
   "version": "0.0.27",
   "type": "module",
   "main": "dist/TimeWidget.min.js",
-  "exports": "dist/TimeWidget.min.js",
+  "exports": {
+    "import": "./dist/TimeWidget.esm.js",
+    "default": "./dist/TimeWidget.min.js"
+  },
   "module": "dist/TimeWidget.esm.js",
   "browser": "dist/TimeWidget.min.js",
   "unpkg": "dist/TimeWidget.min.js",
