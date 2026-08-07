@@ -1422,9 +1422,12 @@ function TimeWidget(
     return ts;
   };
 
-  // Draw the stored reference curves against the CURRENT scales, clipping a copy
-  // to the current domain. Non-destructive: the stored curve data is never mutated,
-  // so zooming out restores points that a narrower domain had hidden.
+  // Draw the stored reference curves against the CURRENT scales. The full curve
+  // is always drawn and the clipPath on gReferences hides whatever falls outside
+  // the plot area — that keeps the line geometry intact, so a curve with few
+  // points doesn't lose a whole segment the moment one endpoint leaves the
+  // domain. Nothing here mutates the stored data, so zooming out restores
+  // everything a narrower domain had hidden.
   function renderReferenceCurves() {
     const curves = ts._referenceCurves;
     if (!curves || !overviewX || !gReferences) return;
@@ -1439,7 +1442,7 @@ function TimeWidget(
       .data(curves)
       .join("path")
       .attr("class", "referenceCurve")
-        .attr("d", (c) => line2(c.data))
+      .attr("d", (c) => line2(c.data))
       .attr("stroke-width", 2)
       .style("fill", "none")
       .style("stroke", (c) => c.color)
