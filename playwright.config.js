@@ -23,8 +23,15 @@ export default defineConfig({
   // ../../dist/TimeWidget.js and ../../node_modules/d3/dist/d3.js, so the
   // root has to be the one directory containing both.
   // Run `npm run build` first — the suite tests dist/, not src/.
+  //
+  // -a 127.0.0.1 is not optional. http-server binds 0.0.0.0 by default, and
+  // the served root here is the whole repository — including .git and every
+  // untracked file. Without it, running the suite on a shared network
+  // publishes the repo's history and any local-only files to that network for
+  // as long as the tests take. -d false additionally stops the tree from being
+  // browsable, so the port only answers for paths a test actually requests.
   webServer: {
-    command: "npx http-server . -p 8099 -c-1 --silent",
+    command: "npx http-server . -p 8099 -c-1 -a 127.0.0.1 -d false --silent",
     url: "http://127.0.0.1:8099/tests/e2e/fixture.html",
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
