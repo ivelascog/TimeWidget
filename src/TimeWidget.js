@@ -1,7 +1,7 @@
 ﻿import * as d3 from "d3";
 import {add, intervalToDuration, sub} from "date-fns";
 
-import {log, logPerformance} from "./utils.js";
+import {log, logPerformance, normalizeDomain, resolveDomains} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -423,8 +423,8 @@ function TimeWidget(
   }
 
   function initDomains({ xDataType, fData }) {
-    if (!xDomain) {
-      xDomain = fixAxis && _this ? _this.extent.x : d3.extent(fData, x); // Keep same axes as in the first rendering
+    if (!ts.xDomain) {
+      ts.xDomain = fixAxis && _this ? _this.extent.x : d3.extent(fData, x); // Keep same axes as in the first rendering
     }
 
     overviewX = xScale ? xScale.copy() : undefined;
@@ -433,7 +433,7 @@ function TimeWidget(
       // X is Date
       hasScaleTime = true;
       if (!overviewX) overviewX = d3.scaleTime();
-      overviewX.domain(xDomain);
+      overviewX.domain(ts.xDomain);
       if (!fmtX) {
         // It is a function of type d3.timeFormat. I don't like the way to check that it is a function of that type, but I don't know a better one.
         fmtX = d3.timeFormat("%Y-%m-%d");
@@ -449,7 +449,7 @@ function TimeWidget(
       // if (xDataType === "number") {
       // X is number
       if (!overviewX) overviewX = d3.scaleLinear();
-      overviewX.domain(xDomain);
+      overviewX.domain(ts.xDomain);
       if (!fmtX) {
         fmtX = d3.format(".1f");
       }
@@ -463,12 +463,12 @@ function TimeWidget(
 
     overviewY = yScale.copy();
 
-      overviewY.domain(ts.yDomain);
+    overviewY.domain(ts.yDomain);
 
-    overviewY
-      .range([height - ts.margin.top - ts.margin.bottom, 0])
-      .nice()
-      .clamp(true);
+    // No .clamp(true): with clamping, points outside a zoomed y-domain pile up
+    // as false flat lines on the top and bottom edges. They are hidden by the
+    // clip-path instead (see #65).
+    overviewY.range([height - ts.margin.top - ts.margin.bottom, 0]).nice();
   }
 
   function init() {
@@ -484,8 +484,8 @@ function TimeWidget(
     timelineOverview = TimeLineOverview({
       ts,
       element: divRender.node(),
-      width: width,
-      height: height,
+        width: width - margin.left - margin.right,
+        height: height - margin.top - margin.bottom,
       x,
       y,
       groupAttr: color,
@@ -676,8 +676,6 @@ function TimeWidget(
       data: groupedData,
       tooltipTarget: divRender.node(),
       contextMenuTarget: divRender.node(),
-      width,
-      height,
       xPartitions,
       yPartitions,
       x,
@@ -1424,9 +1422,23 @@ function TimeWidget(
         x(d) !== null
     );
 
-      let xDataType = typeof x(fData[0]);
+    let xDataType = typeof x(fData[0]);
 
-      initDomains({xDataType, fData});
+    // Full data extent, recomputed for each new dataset. Zooming goes through
+    // ts.update(), never through here, so this is not narrowed by a zoom — but
+    // it must follow the data: domains are clamped to fullExtent, so a stale
+    // one would make records outside the first dataset's range unreachable.
+    ts.fullExtent = { x: d3.extent(fData, x), y: d3.extent(fData, y) };
+
+    // The xDomain/yDomain constructor options were copied onto ts.* at creation
+    // time, before any data (and so before fullExtent) existed. Validate them
+    // here against the real extent, writing back to ts.* — that is what
+    // initDomains() reads. A malformed domain normalizes to null, which lets
+    // initDomains fall back to the full data extent.
+    if (ts.xDomain) ts.xDomain = normalizeDomain(ts.xDomain, ts.fullExtent.x);
+    if (ts.yDomain) ts.yDomain = normalizeDomain(ts.yDomain, ts.fullExtent.y);
+
+    initDomains({ xDataType, fData });
 
       fData = fData.filter(
           (d) => !isNaN(overviewX(x(d))) && !isNaN(overviewY(y(d)))
@@ -1460,8 +1472,7 @@ function TimeWidget(
     overviewY = d3
       .scaleLinear()
       .range([height - ts.margin.top - ts.margin.bottom, 0])
-      .nice()
-      .clamp(true);
+        .nice();
     init();
   }
 
@@ -1481,10 +1492,27 @@ function TimeWidget(
         brushes.addFilters(status, true);
     };
 
+  ts.setDomains = ({ x, y } = {}) => {
+    let next = resolveDomains(
+      { x, y },
+      ts.fullExtent,
+      { x: ts.xDomain, y: ts.yDomain }
+    );
+    ts.xDomain = next.x;
+    ts.yDomain = next.y;
+    ts.update();
+    return ts;
+  };
+
+  ts.getExtent = () => {
+    return ts.fullExtent;
+  };
+
   ts.duplicateSelectedGroup = () => {
     brushes.duplicateBrushGroup();
     return ts;
   };
+
 
   // Remove possible previous event listener
   //target.removeEventListener("TimeWidget", onTimeWidgetEvent);
