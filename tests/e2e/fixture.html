@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TimeWidget e2e fixture</title>
+    <style>
+      body { margin: 0; font-family: sans-serif; }
+      #target { width: 900px; }
+    </style>
+  </head>
+  <body>
+    <!-- Bare host page for the e2e suite. It deliberately builds no widget of
+         its own: each spec constructs exactly the widget it needs via
+         window.makeWidget(), so tests stay independent of the demo pages in
+         example/, which change for demo reasons rather than test reasons. -->
+    <div id="target"></div>
+
+    <!-- d3 is an external of the rollup build, so the bundle needs a global d3.
+         Served from node_modules rather than a CDN: the version then matches
+         package.json exactly, and CI never fails because a CDN was unreachable. -->
+    <script src="../../node_modules/d3/dist/d3.js"></script>
+    <script src="../../dist/TimeWidget.js"></script>
+
+    <script>
+      // Deterministic sawtooth/sine data — no Math.random, so a failure is
+      // always reproducible.
+      window.makeData = function ({ series = 1, points = 40, dates = false } = {}) {
+        const out = [];
+        for (let s = 0; s < series; s++) {
+          for (let i = 0; i < points; i++) {
+            out.push({
+              t: dates ? new Date(2023, 0, 1 + i) : i,
+              v: 100 + 40 * Math.sin(i / 5 + s / 4),
+              id: "s" + s,
+            });
+          }
+        }
+        return out;
+      };
+
+      // Build a widget and mount it. `hidden` parks it off-screen for tests
+      // that only need a second instance to exist in the document.
+      window.makeWidget = function (data, opts = {}, { hidden = false } = {}) {
+        const w = TimeWidget(data, Object.assign({ x: "t", y: "v", id: "id" }, opts));
+        const host = document.createElement("div");
+        if (hidden) host.style.cssText = "position:absolute;left:-9999px;top:0";
+        document.body.appendChild(host);
+        host.appendChild(w);
+        return w;
+      };
+
+      // Record uncaught errors so a spec can assert that a re-render threw
+      // nothing — several of these bugs aborted the render without rejecting
+      // any promise the test could see.
+      window.__errors = [];
+      window.addEventListener("error", (e) => window.__errors.push(String(e.message)));
+      window.addEventListener("unhandledrejection", (e) =>
+        window.__errors.push(String(e.reason))
+      );
+    </script>
+  </body>
+</html>
