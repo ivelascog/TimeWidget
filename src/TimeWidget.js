@@ -1424,10 +1424,11 @@ function TimeWidget(
 
     let xDataType = typeof x(fData[0]);
 
-    // Full data extent captured once, before any zoom narrows the domains.
-    if (!ts.fullExtent) {
-      ts.fullExtent = { x: d3.extent(fData, x), y: d3.extent(fData, y) };
-    }
+    // Full data extent, recomputed for each new dataset. Zooming goes through
+    // ts.update(), never through here, so this is not narrowed by a zoom — but
+    // it must follow the data: domains are clamped to fullExtent, so a stale
+    // one would make records outside the first dataset's range unreachable.
+    ts.fullExtent = { x: d3.extent(fData, x), y: d3.extent(fData, y) };
 
     // The xDomain/yDomain constructor options were copied onto ts.* at creation
     // time, before any data (and so before fullExtent) existed. Validate them
