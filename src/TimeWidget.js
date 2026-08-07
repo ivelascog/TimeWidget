@@ -1,11 +1,15 @@
 ﻿import * as d3 from "d3";
 import {add, intervalToDuration, sub} from "date-fns";
 
-import {log, logPerformance, normalizeDomain} from "./utils.js";
+import {log, logPerformance, normalizeDomain, resolveDomains} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
 import brushInteraction from "./BrushInteraction";
+
+// Serial number for DOM ids that must be unique across the whole document
+// rather than merely within one widget (see clipId below).
+let instanceCounter = 0;
 
 function TimeWidget(
   data,
@@ -94,6 +98,10 @@ function TimeWidget(
   width = overviewWidth || width;
   height = overviewHeight || height;
   detailsMargin = detailsMargin || margin;
+
+  // Stable for the lifetime of this widget: init() re-runs on every update, and
+  // the clipPath must keep the same id so gReferences' url(#…) stays resolvable.
+  const clipId = `plotClip-${++instanceCounter}`;
 
   let ts = {},
     groupedData,
@@ -223,11 +231,15 @@ function TimeWidget(
     <div id="brushesList">
     </div>
     <button id="btnAddBrushGroup">Add Group</button>
+    <button id="btnDuplicateBrushGroup">Duplicate Group</button>
     </div>`;
 
     groupsElement
       .querySelector("button#btnAddBrushGroup")
       .addEventListener("click", onAddBrushGroup);
+    groupsElement
+      .querySelector("button#btnDuplicateBrushGroup")
+      .addEventListener("click", onDuplicateBrushGroup);
 
     if (showBrushesControls) {
       d3.select(groupsElement).insert("h3", ":first-child").text("Groups:");
@@ -241,6 +253,10 @@ function TimeWidget(
 
   function onAddBrushGroup() {
     brushes.addBrushGroup();
+  }
+
+  function onDuplicateBrushGroup() {
+    brushes.duplicateBrushGroup();
   }
 
   function onChangeNonSelected(newState) {
@@ -455,11 +471,12 @@ function TimeWidget(
 
     overviewY = yScale.copy();
 
-      overviewY.domain(ts.yDomain);
+    overviewY.domain(ts.yDomain);
 
-    overviewY
-      .range([height - ts.margin.top - ts.margin.bottom, 0])
-        .nice();
+    // No .clamp(true): with clamping, points outside a zoomed y-domain pile up
+    // as false flat lines on the top and bottom edges. They are hidden by the
+    // clip-path instead (see #65).
+    overviewY.range([height - ts.margin.top - ts.margin.bottom, 0]).nice();
   }
 
   function init() {
@@ -530,10 +547,14 @@ function TimeWidget(
         }
       });
 
-      let clip = g.selectAll("#plotClip")
+      // clip-path is resolved by url(#id) against the whole document, not
+      // scoped to this widget's subtree the way our other ids are — so two
+      // TimeWidgets on one page would both answer to the same name and the
+      // second would be clipped by the first one's rect. Hence the per-instance id.
+      let clip = g.selectAll("#" + clipId)
           .data([1])
           .join("clipPath")
-          .attr("id", "plotClip");
+          .attr("id", clipId);
 
       clip.selectAll("rect")
           .data([1])
@@ -622,7 +643,7 @@ function TimeWidget(
       .data([1])
       .join("g")
       .attr("class", "gReferences")
-        .attr("clip-path", "url(#plotClip)")
+      .attr("clip-path", `url(#${clipId})`)
       .style("pointer-events", "none");
 
     gmainY
@@ -730,7 +751,8 @@ function TimeWidget(
 
       // Seed from the constructor option once, then always redraw stored curves
       // against the freshly-built scales so they track zoom (setDomains -> init).
-      if (referenceCurves && !ts._referenceCurves) ts._referenceCurves = referenceCurves;
+      if (referenceCurves && !ts._referenceCurves)
+        storeReferenceCurves(referenceCurves);
       renderReferenceCurves();
 
       return g;
@@ -1375,15 +1397,27 @@ function TimeWidget(
       return outMap;
     } */
 
+  // Keep sorted COPIES of the reference curves. d3.line() connects points in
+  // array order, so they have to be sorted by x — but the arrays belong to the
+  // caller, and sorting in place would reorder data they still hold. Holding
+  // whole copies (rather than clipping them to the domain, as the original code
+  // did) is what lets zooming back out restore points a narrower domain hid.
+  // Used by both entry points: this setter and the constructor option.
+  // NOTE: Object.assign/slice rather than spread — rollup-plugin-ascii bundles
+  // an acorn too old to parse object spread, and it runs before Babel.
+  function storeReferenceCurves(curves) {
+    ts._referenceCurves = curves.map((c) =>
+      Object.assign({}, c, {
+        data: c.data.slice().sort((a, b) => d3.ascending(a[0], b[0])),
+      })
+    );
+  }
+
   ts.addReferenceCurves = function (curves) {
     if (!Array.isArray(curves)) {
       throw new Error("The reference curves must be an array of Objects");
     }
-    // Store the originals (do NOT mutate) so curves can be re-projected on every
-    // domain change (e.g. zoom via setDomains). renderReferenceCurves clips a copy
-    // to the current domain at draw time.
-    ts._referenceCurves = curves;
-      Object.values(ts._referenceCurves).forEach(({data}) => data.sort((a, b) => d3.ascending(a[0], b[0])));
+    storeReferenceCurves(curves);
     renderReferenceCurves();
     return ts;
   };
@@ -1433,17 +1467,23 @@ function TimeWidget(
         x(d) !== null
     );
 
-      let xDataType = typeof x(fData[0]);
+    let xDataType = typeof x(fData[0]);
 
-      // Full data extent captured once, before any zoom narrows the domains.
-      if (!ts.fullExtent) {
-          ts.fullExtent = {x: d3.extent(fData, x), y: d3.extent(fData, y)};
-      }
+    // Full data extent, recomputed for each new dataset. Zooming goes through
+    // ts.update(), never through here, so this is not narrowed by a zoom — but
+    // it must follow the data: domains are clamped to fullExtent, so a stale
+    // one would make records outside the first dataset's range unreachable.
+    ts.fullExtent = { x: d3.extent(fData, x), y: d3.extent(fData, y) };
 
-      xDomain = normalizeDomain(xDomain, ts.extent);
-      yDomain = normalizeDomain(yDomain, ts.extent);
+    // The xDomain/yDomain constructor options were copied onto ts.* at creation
+    // time, before any data (and so before fullExtent) existed. Validate them
+    // here against the real extent, writing back to ts.* — that is what
+    // initDomains() reads. A malformed domain normalizes to null, which lets
+    // initDomains fall back to the full data extent.
+    if (ts.xDomain) ts.xDomain = normalizeDomain(ts.xDomain, ts.fullExtent.x);
+    if (ts.yDomain) ts.yDomain = normalizeDomain(ts.yDomain, ts.fullExtent.y);
 
-      initDomains({xDataType, fData});
+    initDomains({ xDataType, fData });
 
       fData = fData.filter(
           (d) => !isNaN(overviewX(x(d))) && !isNaN(overviewY(y(d)))
@@ -1498,15 +1538,26 @@ function TimeWidget(
     };
 
   ts.setDomains = ({ x, y } = {}) => {
-      if (x) ts.xDomain = normalizeDomain(x, ts.fullExtent) || ts.xDomain;
-      if (y) ts.yDomain = normalizeDomain(y, ts.fullExtent) || ts.yDomain;
+    let next = resolveDomains(
+      { x, y },
+      ts.fullExtent,
+      { x: ts.xDomain, y: ts.yDomain }
+    );
+    ts.xDomain = next.x;
+    ts.yDomain = next.y;
     ts.update();
     return ts;
   };
 
-    ts.getExtent = () => {
-        return ts.fullExtent;
-    };
+  ts.getExtent = () => {
+    return ts.fullExtent;
+  };
+
+  ts.duplicateSelectedGroup = () => {
+    brushes.duplicateBrushGroup();
+    return ts;
+  };
+
 
   // Remove possible previous event listener
   //target.removeEventListener("TimeWidget", onTimeWidgetEvent);

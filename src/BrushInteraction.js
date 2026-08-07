@@ -702,6 +702,22 @@ function brushInteraction({
     updateGroups();
   };
 
+  me.duplicateBrushGroup = function (sourceId = brushGroupSelected) {
+    const source = brushesGroup.get(sourceId);
+    if (!source) return;
+    const payload = cloneBrushGroupPayload(source);
+    if (payload.brushes.length === 0) {
+      me.addBrushGroup(); // nothing committed → behave like Add Group
+      return;
+    }
+    const before = new Set(brushesGroup.keys());
+    me.addFilters([payload], false); // appends a new group, materializes copied brushes
+    const newId = [...brushesGroup.keys()].find((k) => !before.has(k));
+    if (newId !== undefined) selectBrushGroup(newId);
+    updateStatus();
+    updateGroups();
+  };
+
   me.changeBrushGroupState = function (id, newState) {
     if (brushesGroup.get(id).isEnable === newState) return; //same state so no update needed
 
@@ -1030,25 +1046,32 @@ function brushInteraction({
         if (!isInsideDomain(brush.selectionDomain, scaleX, scaleY)) {
           brush.selectionDomain = clampToDomain(brush.selectionDomain, scaleX.domain(), scaleY.domain());
         }
-        //check min size
-        let [[x0, y0], [x1, y1]] = getSelectionPixels(brush.selectionDomain, brush.selectionPixels);
+        // Clamping can squash a brush that only partly overlaps the new domain
+        // down to (or below) the minimum interactive size. Grow it back off the
+        // edge it is pinned against, so it stays grabbable.
+        let [[x0, y0], [x1, y1]] = getSelectionPixels(brush.selectionDomain);
+        let resized = false;
         if (Math.abs(x0 - x1) < minBrushSize) {
           if (x0 === 0) {
             x1 = x0 + minBrushSize;
           } else {
             x0 = x1 - minBrushSize;
           }
-          brush.selectionDomain = getSelectionDomain([[x0, y0], [x1, y1]]);
+          resized = true;
         }
-
         if (Math.abs(y0 - y1) < minBrushSize) {
-          console.log(y0);
           if (y0 === 0) {
             y1 = y0 + minBrushSize;
           } else {
             y0 = y1 - minBrushSize;
           }
-          brush.selectionDomain = getSelectionDomain([[x0, y0], [x1, y1]]);
+          resized = true;
+        }
+        if (resized) {
+          brush.selectionDomain = getSelectionDomain([
+            [x0, y0],
+            [x1, y1],
+          ]);
         }
 
         newBrush(brush.mode, brush.aggregation, groupId, brush.selectionDomain);
@@ -1085,6 +1108,29 @@ function brushInteraction({
   drawBrushes();
 
   return me;
+}
+
+// Pure: build the payload that me.addFilters() consumes, from a brush group's
+// committed brushes (those with a non-null selection). No d3/DOM references.
+export function cloneBrushGroupPayload(group, { suffix = " (copy)" } = {}) {
+  const brushes = [];
+  if (group && group.brushes) {
+    for (const brush of group.brushes.values()) {
+      if (brush.selection !== null && brush.selectionDomain) {
+        brushes.push({
+          mode: brush.mode,
+          aggregation: brush.aggregation,
+          selectionDomain: brush.selectionDomain,
+        });
+      }
+    }
+  }
+  return {
+    isEnable: true,
+    isActive: false,
+    name: ((group && group.name) || "Group") + suffix,
+    brushes,
+  };
 }
 
 export default brushInteraction;
