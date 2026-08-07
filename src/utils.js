@@ -61,6 +61,29 @@ export function isInsideDomain(domain, scaleX, scaleY) {
   );
 }
 
+// Clamp a brush selectionDomain into the current axis domains.
+//
+// A selectionDomain is [[xLow, yHigh], [xHigh, yLow]]: it is built from the
+// pixel corners [[left, top], [right, bottom]], and scaleY inverts (its range
+// is [height, 0]), so the FIRST pair carries the HIGH y value. normalizeDomain
+// works in ascending order, so y is reversed on the way in and must be
+// reversed again on the way out — returning it ascending flips the brush
+// upside down. isInsideDomain() encodes the same convention.
+export function clampToDomain(domain, xDomain, yDomain) {
+  let clampedX = normalizeDomain([domain[0][0], domain[1][0]], xDomain, {
+    eps: 0,
+  });
+  let clampedY = normalizeDomain([domain[1][1], domain[0][1]], yDomain, {
+    eps: 0,
+  });
+  // Nothing sensible to clamp to — leave the selection as it was.
+  if (!clampedX || !clampedY) return domain;
+  return [
+    [clampedX[0], clampedY[1]],
+    [clampedX[1], clampedY[0]],
+  ];
+}
+
 export const BrushModes = Object.freeze({
   Intersect: "intersect",
   Contains: "contains",

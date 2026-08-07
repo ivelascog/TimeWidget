@@ -7,6 +7,10 @@ import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
 import brushInteraction from "./BrushInteraction";
 
+// Serial number for DOM ids that must be unique across the whole document
+// rather than merely within one widget (see clipId below).
+let instanceCounter = 0;
+
 function TimeWidget(
   data,
   {
@@ -94,6 +98,10 @@ function TimeWidget(
   width = overviewWidth || width;
   height = overviewHeight || height;
   detailsMargin = detailsMargin || margin;
+
+  // Stable for the lifetime of this widget: init() re-runs on every update, and
+  // the clipPath must keep the same id so gReferences' url(#…) stays resolvable.
+  const clipId = `plotClip-${++instanceCounter}`;
 
   let ts = {},
     groupedData,
@@ -539,6 +547,23 @@ function TimeWidget(
         }
       });
 
+      // clip-path is resolved by url(#id) against the whole document, not
+      // scoped to this widget's subtree the way our other ids are — so two
+      // TimeWidgets on one page would both answer to the same name and the
+      // second would be clipped by the first one's rect. Hence the per-instance id.
+      let clip = g.selectAll("#" + clipId)
+          .data([1])
+          .join("clipPath")
+          .attr("id", clipId);
+
+      clip.selectAll("rect")
+          .data([1])
+          .join("rect")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("width", width - margin.right - margin.left)
+          .attr("height", height - margin.top - margin.bottom);
+
     let yAxis = d3.axisLeft(overviewY);
     if (yTicks) {
       yAxis
@@ -618,6 +643,7 @@ function TimeWidget(
       .data([1])
       .join("g")
       .attr("class", "gReferences")
+      .attr("clip-path", `url(#${clipId})`)
       .style("pointer-events", "none");
 
     gmainY
@@ -723,9 +749,11 @@ function TimeWidget(
       if (_this) brushes.addFilters(_this.value.status, true);
       else if (filters) brushes.addFilters(filters, true);
 
-      if (referenceCurves) {
-          ts.addReferenceCurves(referenceCurves);
-      }
+      // Seed from the constructor option once, then always redraw stored curves
+      // against the freshly-built scales so they track zoom (setDomains -> init).
+      if (referenceCurves && !ts._referenceCurves)
+        storeReferenceCurves(referenceCurves);
+      renderReferenceCurves();
 
       return g;
   }
@@ -1193,8 +1221,13 @@ function TimeWidget(
       }
       for (let line of g[1]) {
         for (let point of line[1]) {
-          let i = Math.floor((x(point) - minX) / binW);
-          i = i > ts.medianNumBins - 1 ? i - 1 : i;
+          let px = x(point);
+          // Skip points outside the (possibly zoomed) X domain: when zoomed in,
+          // data extends past [minX, maxX] and would index outside `bins`.
+          if (px < minX || px > maxX) continue;
+          let i = Math.floor((px - minX) / binW);
+          // Clamp to a valid bin (guards the right edge where px === maxX).
+          i = Math.max(0, Math.min(ts.medianNumBins - 1, i));
           bins[i].data.push(y(point));
         }
       }
@@ -1364,26 +1397,41 @@ function TimeWidget(
       return outMap;
     } */
 
+  // Keep sorted COPIES of the reference curves. d3.line() connects points in
+  // array order, so they have to be sorted by x — but the arrays belong to the
+  // caller, and sorting in place would reorder data they still hold. Holding
+  // whole copies (rather than clipping them to the domain, as the original code
+  // did) is what lets zooming back out restore points a narrower domain hid.
+  // Used by both entry points: this setter and the constructor option.
+  // NOTE: Object.assign/slice rather than spread — rollup-plugin-ascii bundles
+  // an acorn too old to parse object spread, and it runs before Babel.
+  function storeReferenceCurves(curves) {
+    ts._referenceCurves = curves.map((c) =>
+      Object.assign({}, c, {
+        data: c.data.slice().sort((a, b) => d3.ascending(a[0], b[0])),
+      })
+    );
+  }
+
   ts.addReferenceCurves = function (curves) {
-    if (!overviewX) return;
     if (!Array.isArray(curves)) {
       throw new Error("The reference curves must be an array of Objects");
     }
-    let domainX = overviewX.domain();
-    let domainY = overviewY.domain();
+    storeReferenceCurves(curves);
+    renderReferenceCurves();
+    return ts;
+  };
 
-    curves.forEach((c) => {
-      c.data.sort((a, b) => d3.ascending(x(a), x(b)));
-      c.data = c.data.filter(
-        (p) =>
-          p[0] >= domainX[0] &&
-          p[0] <= domainX[1] &&
-          p[1] >= domainY[0] &&
-          p[1] <= domainY[1]
-      );
-    });
-
-    let line2 = d3
+  // Draw the stored reference curves against the CURRENT scales. The full curve
+  // is always drawn and the clipPath on gReferences hides whatever falls outside
+  // the plot area — that keeps the line geometry intact, so a curve with few
+  // points doesn't lose a whole segment the moment one endpoint leaves the
+  // domain. Nothing here mutates the stored data, so zooming out restores
+  // everything a narrower domain had hidden.
+  function renderReferenceCurves() {
+    const curves = ts._referenceCurves;
+    if (!curves || !overviewX || !gReferences) return;
+    const line2 = d3
       .line()
       .defined((d) => d[1] !== undefined && d[1] !== null)
       .x((d) => overviewX(d[0]))
@@ -1399,7 +1447,7 @@ function TimeWidget(
       .style("fill", "none")
       .style("stroke", (c) => c.color)
       .style("opacity", (c) => c.opacity);
-  };
+  }
 
   ts.updateCallback = function (_) {
     return arguments.length ? ((updateCallback = _), ts) : updateCallback;
