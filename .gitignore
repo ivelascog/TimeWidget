@@ -130,3 +130,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 .DS_Store
+
+# Playwright e2e artifacts
+test-results/
+playwright-report/
+blob-report/
+.playwright-mcp/
