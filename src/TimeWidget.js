@@ -1,7 +1,14 @@
 ﻿import * as d3 from "d3";
 import {add, intervalToDuration, sub} from "date-fns";
 
-import {log, logPerformance, normalizeDomain, resolveDomains} from "./utils.js";
+import {
+    finishRenderMeasurement,
+    log,
+    normalizeDomain,
+    PERFORMANCELOG,
+    resolveDomains,
+    startRenderMeasurement,
+} from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
@@ -711,7 +718,7 @@ function TimeWidget(
       fmtX: fmtX,
       scaleX: overviewX,
       scaleY: overviewY,
-      updateTime: 150,
+        updateTime: 33,
       extent: [[0,0],[width - margin.left - margin.right, height - margin.top - margin.bottom],],
       selectionCallback: onSelectionChange,
       groupsCallback: onBrushGroupsChange,
@@ -1145,8 +1152,16 @@ function TimeWidget(
     );
   }
 
-  // To render the overview and detailed view based on the selectedData
-  function render(dataSelected, dataNotSelected, hasSelection) {
+    // Performs one complete render. Brush changes reach here through the single
+    // animation-frame scheduler in BrushInteraction.
+    function renderNow(
+        dataSelected,
+        dataNotSelected,
+        hasSelection,
+        measurement = null
+    ) {
+
+
     // Prepare the medians array to print ( only the enable groups)
     let medians = [];
     let enableBrushGroups = brushes.getEnableGroups();
@@ -1171,6 +1186,7 @@ function TimeWidget(
     // Delete the notSelected elements that are selected.
     mDataSelected.forEach((d) => mDataNotSelected.delete(d));
     dataNotSelected = Array.from(mDataNotSelected);
+        if (PERFORMANCELOG) startRenderMeasurement(measurement);
 
     timelineOverview.render(
       mDataSelected,
@@ -1182,11 +1198,10 @@ function TimeWidget(
 
     if (ts.hasDetails) {
       let brushGroupSelected = brushes.getBrushGroupSelected();
-      window.requestAnimationFrame(() =>
-        timelineDetails.render({ data: dataSelected, brushGroupSelected })
-      );
-      // window.requestAnimationFrame(() => renderDetailsCanvas(dataSelected));
+        timelineDetails.render({data: dataSelected, brushGroupSelected});
     }
+
+        if (PERFORMANCELOG) finishRenderMeasurement(measurement);
   }
 
   function getBrushGroupsMedians(data) {
@@ -1250,7 +1265,8 @@ function TimeWidget(
   function onSelectionChange(
     newDataSelected = dataSelected,
     newDataNotSelected = dataNotSelected,
-    hasSelection = brushes.hasSelection()
+    hasSelection = brushes.hasSelection(),
+    measurement = null
   ) {
     dataSelected = newDataSelected;
     dataNotSelected = newDataNotSelected;
@@ -1272,7 +1288,7 @@ function TimeWidget(
     }
 
 
-    render(renderSelected, renderNotSelected, hasSelection); // Print the filtered data by active dataGroups
+      renderNow(renderSelected, renderNotSelected, hasSelection, measurement);
 
     renderBrushesControls();
     triggerValueUpdate(renderSelected);
@@ -1280,7 +1296,7 @@ function TimeWidget(
 
   // Called every time the brushGroups changes
   function onBrushGroupsChange() {
-    render(renderSelected, renderNotSelected, brushes.hasSelection());
+      renderNow(renderSelected, renderNotSelected, brushes.hasSelection());
     renderBrushesControls();
     triggerValueUpdate();
   }
@@ -1358,7 +1374,6 @@ function TimeWidget(
     };
     divOverview.brushGroups = brushes.getBrushesGroup();
     updateStatus();
-    logPerformance("FrameTime");
   }
 
   /*function brushesToDomain(brushesGroup) {
@@ -1528,7 +1543,6 @@ function TimeWidget(
 
   // To allow a message from the outside to rerender
   ts.render = () => {
-    // render(dataSelected, dataNotSelected);
     onSelectionChange();
   };
 

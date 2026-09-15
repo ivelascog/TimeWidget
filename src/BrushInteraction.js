@@ -3,7 +3,15 @@ import {throttle} from "throttle-debounce";
 import BVH from "./BVH";
 import brushTooltipEditable from "./BrushTooltipEditable.js";
 import BrushContextMenu from "./BrushContextMenu.js";
-import {clampToDomain, compareSets, darken, isInsideDomain, logPerformance} from "./utils.js";
+import {
+  clampToDomain,
+  compareSets,
+  darken,
+  finishSelectionMeasurement,
+  isInsideDomain,
+  PERFORMANCELOG,
+  startPerformanceMeasurement,
+} from "./utils.js";
 
 import {BrushAggregation, BrushModes, log} from "./utils";
 
@@ -38,6 +46,9 @@ function brushInteraction({
     gBrushes,
     tBrushed,
     tUpdateSelection,
+      interactionFrame = null,
+      pendingBrushUpdate = null,
+      pendingSelectionUpdate = false,
     tShowTooltip,
     tSelectionCall,
     brushGroupSelected,
@@ -54,8 +65,12 @@ function brushInteraction({
   gBrushes = d3.select(element);
   gBrushes.node().innerHTML = "";
 
-  tBrushed = throttle(updateTime, brushed);
-  tUpdateSelection = throttle(updateTime, updateSelection);
+  // A drag can emit many events before the browser has a chance to paint.
+  // Keep only the latest state and calculate the selection immediately before
+  // that paint. Its callback renders directly, so selection and drawing share
+  // this same animation frame.
+  tBrushed = scheduleBrushUpdate;
+  tUpdateSelection = scheduleSelectionUpdate;
   tShowTooltip = throttle(50, showBrushTooltip);
   tSelectionCall = throttle(50, updateSelectedCoordinates);
 
@@ -152,6 +167,7 @@ function brushInteraction({
         Math.abs(y0 - y1) < minBrushSize
       ) {
         // Remove brush smaller than 5px
+        cancelPendingInteraction();
         removeBrush(brush);
       } else if (!ts.autoUpdate) {
         // update manually if not autoupdate with brushed event.
@@ -160,8 +176,12 @@ function brushInteraction({
         } else {
           brushed({ selection, sourceEvent }, brush);
         }
+      } else {
+        // Do not leave the final pointer position waiting for another frame.
+        flushBrushUpdate({selection, sourceEvent}, brush);
       }
     } else {
+      cancelPendingInteraction();
       removeBrush(brush);
     }
     if (brush[0] === brushCount - 1) newBrush(); // If the user has just created a new TimeBox, prepare the next one so that it can be created.
@@ -222,28 +242,77 @@ function brushInteraction({
     return selectionDomain.map(([x, y]) => [scaleX(x), scaleY(y)]);
   }
 
+  function scheduleInteractionFrame() {
+    if (interactionFrame !== null) return;
+    interactionFrame = window.requestAnimationFrame(() => {
+      interactionFrame = null;
+
+      // Updating all selected brushes subsumes a pending single-brush update.
+      if (pendingSelectionUpdate) {
+        pendingSelectionUpdate = false;
+        pendingBrushUpdate = null;
+        updateSelection();
+        return;
+      }
+
+      const update = pendingBrushUpdate;
+      pendingBrushUpdate = null;
+      if (update) brushed(update.event, update.brush);
+    });
+  }
+
+  function scheduleBrushUpdate(event, brush) {
+    pendingBrushUpdate = {event, brush};
+    scheduleInteractionFrame();
+  }
+
+  function scheduleSelectionUpdate() {
+    pendingSelectionUpdate = true;
+    scheduleInteractionFrame();
+  }
+
+  function flushBrushUpdate(event, brush) {
+    pendingBrushUpdate = {event, brush};
+    if (interactionFrame !== null) {
+      window.cancelAnimationFrame(interactionFrame);
+      interactionFrame = null;
+    }
+    pendingSelectionUpdate = false;
+    const update = pendingBrushUpdate;
+    pendingBrushUpdate = null;
+    brushed(update.event, update.brush);
+  }
+
+  function cancelPendingInteraction() {
+    pendingBrushUpdate = null;
+    pendingSelectionUpdate = false;
+    if (interactionFrame !== null) {
+      window.cancelAnimationFrame(interactionFrame);
+      interactionFrame = null;
+    }
+  }
+
   // Update brush intersections when moved
   function brushed({ selection, sourceEvent }, brush) {
-      logPerformance();
     //log("brushed", brush, arguments);
     if (!brush[1]) {
-      // TODO
       log("**🚫 ERROR brushed called without a brush[1]", brush);
       return;
     }
 
     // dont execute this method when move brushes programmatically (sourceEvent === null) or when there is no selection
     if (sourceEvent === undefined || !selection) return;
+    const measurement = PERFORMANCELOG ? startPerformanceMeasurement() : null;
     //log("brushed", brush);
     brush[1].selection = selection;
     brush[1].selectionDomain = getSelectionDomain(selection); // Calculate the selection coordinates in data domain
     if (updateBrush(brush)) {
       //Update intersections with modified brush
-      brushFilter();
+      brushFilter(measurement);
     }
   }
 
-  function brushFilter() {
+  function brushFilter(measurement = null) {
     dataNotSelected = [];
     dataSelected = new Map();
     brushesGroup.forEach((d, key) => dataSelected.set(key, []));
@@ -265,7 +334,13 @@ function brushInteraction({
       dataNotSelected = data;
     }
 
-    selectionCallback(dataSelected, dataNotSelected, brushSize !== 0);
+    finishSelectionMeasurement(measurement);
+    selectionCallback(
+        dataSelected,
+        dataNotSelected,
+        brushSize !== 0,
+        measurement
+    );
   }
 
   function removeBrush([id, brush]) {
@@ -319,6 +394,7 @@ function brushInteraction({
 
   // Update the intersection of all selected brushes
   function updateSelection() {
+    const measurement = PERFORMANCELOG ? startPerformanceMeasurement() : null;
     let someUpdate = false;
     for (const brushGroup of brushesGroup.values()) {
       for (const brush of brushGroup.brushes) {
@@ -329,7 +405,7 @@ function brushInteraction({
       }
     }
     if (someUpdate) {
-      brushFilter();
+      brushFilter(measurement);
     }
   }
 
