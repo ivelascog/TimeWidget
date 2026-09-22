@@ -7,6 +7,7 @@ function BrushTooltipEditable({
   fmtY,
   target,
   margin = { top: 0, left: 0 },
+  bounds,
   callback = () => {},
 }) {
   const x0E = htl.html`<input class="x0" contenteditable="true">`;
@@ -83,10 +84,33 @@ function BrushTooltipEditable({
 
     resizeInputs();
 
-    fromE.style.top = selectionPixels[0][1] + "px";
-    fromE.style.left = selectionPixels[0][0] + "px";
-    toE.style.top = selectionPixels[1][1] + "px";
-    toE.style.left = selectionPixels[1][0] + "px";
+    const tooltipBounds = bounds || [
+      [0, 0],
+      [
+        Math.max(0, target.clientWidth - margin.left),
+        Math.max(0, target.clientHeight - margin.top),
+      ],
+    ];
+    const fromContent = fromE.firstElementChild;
+    const fromRect = fromContent.getBoundingClientRect();
+    const toRect = toE.getBoundingClientRect();
+    const [fromLeft, fromTop] = clampTooltipPosition(
+      selectionPixels[0],
+      [fromRect.width, fromRect.height],
+      tooltipBounds,
+      { alignX: "end", alignY: "end" }
+    );
+    const [toLeft, toTop] = clampTooltipPosition(
+      selectionPixels[1],
+      [toRect.width, toRect.height],
+      tooltipBounds
+    );
+
+    // fromContent is anchored by its bottom-right corner inside fromE.
+    fromE.style.left = fromLeft + fromRect.width + "px";
+    fromE.style.top = fromTop + fromRect.height + "px";
+    toE.style.left = toLeft + "px";
+    toE.style.top = toTop + "px";
   };
 
   let autoHideTimeout = null;
@@ -118,7 +142,10 @@ function BrushTooltipEditable({
   });
   brushTooltip.addEventListener("focusout", () => {
     setTimeout(() => {
-      if (!brushTooltip.matches(":hover") && !brushTooltip.contains(document.activeElement)) {
+      if (
+        !brushTooltip.matches(":hover") &&
+        !brushTooltip.contains(document.activeElement)
+      ) {
         brushTooltip.__scheduleAutoHide();
       }
     });
@@ -152,6 +179,23 @@ function BrushTooltipEditable({
   resizeInputs();
 
   return brushTooltip;
+}
+
+export function clampTooltipPosition(
+  [anchorX, anchorY],
+  [tooltipWidth, tooltipHeight],
+  [[minX, minY], [maxX, maxY]],
+  { alignX = "start", alignY = "start" } = {}
+) {
+  const preferredLeft = alignX === "end" ? anchorX - tooltipWidth : anchorX;
+  const preferredTop = alignY === "end" ? anchorY - tooltipHeight : anchorY;
+  const latestLeft = Math.max(minX, maxX - tooltipWidth);
+  const latestTop = Math.max(minY, maxY - tooltipHeight);
+
+  return [
+    Math.min(Math.max(preferredLeft, minX), latestLeft),
+    Math.min(Math.max(preferredTop, minY), latestTop),
+  ];
 }
 
 export default BrushTooltipEditable;

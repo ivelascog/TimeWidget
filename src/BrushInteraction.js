@@ -95,6 +95,7 @@ function brushInteraction({
     fmtY,
     target: tooltipTarget,
     margin: { top: ts.margin.top, left: ts.margin.left },
+    bounds: extent,
     callback: onTooltipChange,
   });
 
@@ -837,11 +838,11 @@ function brushInteraction({
   };
 
   me.getBrushesGroupSize = function () {
-    return brushesGroup.length;
+    return brushesGroup.size;
   };
 
   me.removeBrushGroup = function (id) {
-    if (brushesGroup.length <= 1) return;
+    if (brushesGroup.size <= 1) return;
 
     let itKeys = brushesGroup.keys();
     let newId = itKeys.next().value;
@@ -869,6 +870,8 @@ function brushInteraction({
 
     brushesGroup.delete(id);
 
+    drawBrushes();
+    updateStatus();
     updateGroups();
   };
 
