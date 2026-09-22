@@ -346,6 +346,10 @@ function brushInteraction({
   function removeBrush([id, brush]) {
     brushSize--;
     brushesGroup.get(brush.group).brushes.delete(id);
+    if (selectedBrush && selectedBrush[0] === id) {
+      selectedBrush = null;
+      selectedBrushCallback(null);
+    }
 
     drawBrushes();
     brushFilter();
@@ -362,7 +366,8 @@ function brushInteraction({
     groupsCallback(brushesGroup);
   }
 
-  function updateSelectedCoordinates({ selection }) {
+  function updateSelectedCoordinates({ selection }, brush = selectedBrush) {
+    if (!selectedBrush || !brush || brush[0] !== selectedBrush[0]) return;
     let selectionDomain = getSelectionDomain(selection);
     changeSelectedCoordinatesCallback(selectionDomain);
   }
@@ -441,7 +446,6 @@ function brushInteraction({
       return;
     }
     const [triggerId, triggerBrush] = trigger;
-    updateCirclesSelected(d3.select(this),triggerBrush);
 
     if (!selection || !triggerBrush.isSelected) return;
 
@@ -450,6 +454,10 @@ function brushInteraction({
     let distY = y0 - triggerBrush.selection[0][1];
     triggerBrush.selection = selection;
     triggerBrush.selectionDomain = getSelectionDomain(selection);
+    updateCirclesSelected(
+      gBrushes.selectAll("#brush-" + triggerId),
+      triggerBrush
+    );
     for (const brushGroup of brushesGroup.values()) {
       for (const [brushId, brush] of brushGroup.brushes) {
         if (brush.isSelected && !(triggerId === brushId)) {
@@ -499,7 +507,7 @@ function brushInteraction({
   function selectBrush(brush) {
     brush[1].isSelected = !brush[1].isSelected;
     updateGroups();
-    selectedBrushCallback(brush);
+    selectedBrushCallback(selectedBrush);
   }
 
   function deselectAllBrushes() {
@@ -508,6 +516,8 @@ function brushInteraction({
         brush[1].isSelected = false;
       }
     }
+    selectedBrush = null;
+    selectedBrushCallback(null);
   }
 
   function getUnusedIdBrushGroup() {
@@ -581,8 +591,9 @@ function brushInteraction({
 // Called by drawBrushes
   function drawOneBrush(d) {
     const brushValue = d[1];
+    const brushElement = d3.select(this);
 
-    d3.select(this)
+    brushElement
       .selectAll(".selection")
       .style("outline", "-webkit-focus-ring-color solid 0px")
       .style("fill", computeColor(brushValue.group))
@@ -596,22 +607,28 @@ function brushInteraction({
       .style("fill", computeColor(brushValue.group))
       .attr("tabindex", 0)
       .on("mousedown", (sourceEvent) => {
-        if (sourceEvent.button === 0) {
-          //Do that in left click
-          let selection = brushValue.selection;
-          updateSelectedCoordinates({ selection });
-          selectedBrush = selectedBrush && d[0] === selectedBrush[0] ? null : d;
-          selectedBrushCallback(selectedBrush);
+        if (
+          sourceEvent.button !== 0 ||
+          (selectedBrush && selectedBrush[0] === d[0])
+        ) return;
 
-          // Show shadow on current brush
-          gBrushes
-            .selectAll(".brush")
-            .style("-webkit-filter", brushShadowIfSelected)
-            .style("filter", brushShadowIfSelected);
-
-          if (sourceEvent.shiftKey) {
-            selectBrush(d);
-          }
+        // A press selects an inactive TimeBox for both a click and a drag.
+        // Pressing an already active TimeBox leaves its state unchanged.
+        selectedBrush = d;
+        selectedBrushCallback(selectedBrush);
+        updateSelectedCoordinates(
+          { selection: brushValue.selection },
+          selectedBrush
+        );
+        gBrushes
+          .selectAll(".brush")
+          .style("-webkit-filter", brushShadowIfSelected)
+          .style("filter", brushShadowIfSelected);
+      })
+      .on("click", (sourceEvent) => {
+        if (sourceEvent.button === 0 && sourceEvent.shiftKey) {
+          selectBrush(d);
+          drawBrushes();
         }
       })
       .on("contextmenu", (sourceEvent) => {
@@ -658,8 +675,10 @@ function brushInteraction({
         );
 
     if (ts.showBrushTooltip) {
-      d3.select(this)
+      brushElement
         .selectAll(":not(.overlay)")
+        .on("mouseenter.tooltip", brushTooltip.__cancelAutoHide)
+        .on("mouseleave.tooltip", brushTooltip.__scheduleAutoHide)
         .on("mousemove", (sourceEvent) => {
           let selection = brushValue.selection;
           showBrushTooltip({ selection, sourceEvent }, d);
@@ -707,9 +726,7 @@ function brushInteraction({
       .attr("id", ([id]) => "brush-" + id)
       .each(function ([, brush]) {
         // Actually create the d3 brush
-        const sel = d3.select(this).call(brush.brush);
-
-        return sel;
+        return d3.select(this).call(brush.brush);
       })
       .style("-webkit-filter", brushShadowIfSelected)
       .style("filter", brushShadowIfSelected)
@@ -803,6 +820,8 @@ function brushInteraction({
       // Hide tooltip if it was in a brush of that group.
       if (selectedBrush && selectedBrush[1].group === id) {
         brushTooltip.__hide();
+        selectedBrush = null;
+        selectedBrushCallback(null);
       }
     }
 
@@ -970,7 +989,7 @@ function brushInteraction({
     ];
 
     let sourceEvent = new Event("move"); // fake event to be able to call brushed programmatically
-    if (moveSelection) {
+    if (moveSelection && brushValue.isSelected) {
       moveSelectedBrushes({ selection, sourceEvent }, [brushID, brushValue]);
     } else {
       brushed({ selection, sourceEvent }, [brushID, brushValue]);
@@ -1064,7 +1083,15 @@ function brushInteraction({
     };
   }
   me.invertQuery = function (brushGroup) {
-    let brushes = brushesGroup.get(brushGroup).brushes;
+    const groupBrushes = brushesGroup.get(brushGroup).brushes;
+    const selectedBrushes = new Map(
+      Array.from(groupBrushes).filter(([, brush]) =>
+        brush.selection && brush.isSelected
+      )
+    );
+
+    const brushes = selectedBrushes.size > 0 ? selectedBrushes : groupBrushes;
+    const measurement = PERFORMANCELOG ? startPerformanceMeasurement() : null;
     let miny = Number.MAX_VALUE;
     let maxy = Number.MIN_VALUE;
     brushes.forEach((brush) => {
@@ -1079,9 +1106,10 @@ function brushInteraction({
       let brushMidPoint = brushHeight / 2 + brush.selection[0][1];
       let distY = midPointQuery - brushMidPoint;
       moveBrush([brushId, brush], 0, distY * 2);
+      updateBrush([brushId, brush]);
     });
 
-    tUpdateSelection();
+    brushFilter(measurement);
   };
 
   me.invertQuerySelectedGroup = function () {

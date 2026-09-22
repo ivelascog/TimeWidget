@@ -1,5 +1,7 @@
 import * as htl from "htl";
 
+const autoCloseTime = 500; // ms
+
 function BrushTooltipEditable({
   fmtX,
   fmtY,
@@ -7,10 +9,10 @@ function BrushTooltipEditable({
   margin = { top: 0, left: 0 },
   callback = () => {},
 }) {
-  const x0E = htl.html`<input class="x0" contenteditable="true"></input>`;
-  const y0E = htl.html`<input class="y0" contenteditable="true"></input>`;
-  const x1E = htl.html`<input class="x1" contenteditable="true"></input>`;
-  const y1E = htl.html`<input class="y1" contenteditable="true"></input>`;
+  const x0E = htl.html`<input class="x0" contenteditable="true">`;
+  const y0E = htl.html`<input class="y0" contenteditable="true">`;
+  const x1E = htl.html`<input class="x1" contenteditable="true">`;
+  const y1E = htl.html`<input class="y1" contenteditable="true">`;
 
   // https://stackoverflow.com/questions/3392493/adjust-width-of-input-field-to-its-input
   const adjustInputWidth = (input) => {
@@ -28,7 +30,7 @@ function BrushTooltipEditable({
   const btnChange1E = htl.html`<button>✅</button>`;
 
   const fromE = htl.html`<div style="position: absolute; top:0; left:0;">
-    <div style="display:flex; position: absolute; bottom: 0px; right: 0px;">
+    <div style="display:flex; position: absolute; bottom: 0; right: 0;">
       ${x0E}<strong> x </strong>${y0E} ${btnChange0E}
     </div>
   </div>`;
@@ -43,11 +45,11 @@ function BrushTooltipEditable({
       margin-right: 1px;
     }
     div.__ts_tooltip div > button {
-      padding: 0px;
+      padding: 0;
       display: none;
     }
     div.__ts_tooltip div:hover > button {
-      padding: 0px;
+      padding: 0;
       display: block;
     }
     div.__ts_tooltip input {
@@ -72,6 +74,7 @@ function BrushTooltipEditable({
   // y1E.oninput = (evt) => evt.preventDefault();
 
   brushTooltip.__update = ({ selection, selectionPixels }) => {
+    brushTooltip.__cancelAutoHide();
     brushTooltip.style.display = "block";
     x0E.value = fmtX(selection[0][0]);
     x1E.value = fmtX(selection[1][0]);
@@ -86,7 +89,40 @@ function BrushTooltipEditable({
     toE.style.left = selectionPixels[1][0] + "px";
   };
 
-  brushTooltip.__hide = () => (brushTooltip.style.display = "none");
+  let autoHideTimeout = null;
+  brushTooltip.__cancelAutoHide = () => {
+    if (autoHideTimeout !== null) {
+      clearTimeout(autoHideTimeout);
+      autoHideTimeout = null;
+    }
+  };
+  brushTooltip.__scheduleAutoHide = () => {
+    brushTooltip.__cancelAutoHide();
+    // A short delay lets the pointer move from the TimeBox into the tooltip
+    // so its coordinate fields remain usable.
+    autoHideTimeout = setTimeout(() => {
+      autoHideTimeout = null;
+      if (!brushTooltip.contains(document.activeElement)) brushTooltip.__hide();
+    }, autoCloseTime);
+  };
+  brushTooltip.__hide = () => {
+    brushTooltip.__cancelAutoHide();
+    brushTooltip.style.display = "none";
+  };
+
+  brushTooltip.addEventListener("pointerenter", () => {
+    brushTooltip.__cancelAutoHide();
+  });
+  brushTooltip.addEventListener("pointerleave", () => {
+    brushTooltip.__scheduleAutoHide();
+  });
+  brushTooltip.addEventListener("focusout", () => {
+    setTimeout(() => {
+      if (!brushTooltip.matches(":hover") && !brushTooltip.contains(document.activeElement)) {
+        brushTooltip.__scheduleAutoHide();
+      }
+    });
+  });
 
   // brushTooltip.oninput = (evt) => evt.preventDefault();
 
@@ -102,6 +138,11 @@ function BrushTooltipEditable({
 
   btnChange0E.addEventListener("click", triggerUpdate);
   btnChange1E.addEventListener("click", triggerUpdate);
+  brushTooltip.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !event.target.matches("input")) return;
+    event.preventDefault();
+    triggerUpdate();
+  });
 
   let tooltipNode = target.getElementsByClassName("__ts_tooltip");
   if (tooltipNode.length > 0) target.removeChild(tooltipNode[0]);
