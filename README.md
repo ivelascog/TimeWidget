@@ -288,6 +288,52 @@ filters: [
 
 
 
+## Contributing
+
+```bash
+npm ci
+npm run build        # rollup -> dist/{TimeWidget.js,.esm.js,.min.js}
+npm run test:all     # unit tests -> build -> e2e. The full gate.
+```
+
+To try a change in a browser, serve the **repository root** — the examples load
+`../dist/TimeWidget.js`, so serving `example/` on its own gives you a 404:
+
+```bash
+npm run build
+npx http-server . -p 8099 -c-1 -a 127.0.0.1
+# then open http://localhost:8099/example/stocks.html
+```
+
+`example/stocks.html` is the most complete demo (real data, brushes, group
+medians, reference curves). `npm run dev` is a rollup watch build, not a server.
+
+Working with an AI coding agent? [`CLAUDE.md`](./CLAUDE.md) documents the
+architecture, conventions, and the non-obvious traps in this codebase.
+
+### Testing
+
+Two tiers, because they catch different things:
+
+| Command | What it covers |
+|---|---|
+| `npm test` | Jest unit tests over the pure logic in `src/utils.js`, `src/BVH.js` |
+| `npm run test:e2e` | Playwright, real browser, driving the built bundle |
+
+**Put a test at the tier that can actually observe the bug.** Pure-logic bug →
+unit test. Anything involving construction, rendering, the DOM, or two widgets
+on one page → e2e; those bugs are invisible to the unit suite, which has been
+fully green while exactly that class of bug was live.
+
+Run `npm run build` before `npm run test:e2e` — the e2e suite drives `dist/`,
+so an un-built source change simply isn't there.
+
+**Prove a new test fails without its fix.** Revert the fix, watch the test go
+red, then restore it. A test that has never failed proves nothing, and it is
+easy to write an assertion that quietly holds either way.
+
+Both tiers run in CI on every pull request.
+
 ## License
 
 TimeWidget.js is licensed under the MIT license. (http://opensource.org/licenses/MIT)
