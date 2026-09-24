@@ -9,23 +9,36 @@
         <label for="lines">Nº of TimeLines</label>
         <input type="number" min="0" value="100" step="1" id="lines">
         <label for="pointsPerLines">Points per Lines</label>
-        <input type="number" min="0" step="1" value="5" id="pointsPerLines">
+        <input type="number" min="2" step="1" value="100" id="pointsPerLines">
         <label for="result">TotalPoints</label>
         <output for="lines pointsPerLines" id="result"></output>
+        <label for="maxSamples">Samples</label>
+        <input type="number" min="10" value="300" step="10" id="maxSamples">
+        <label for="reportEvery">Report every</label>
+        <input type="number" min="1" value="60" step="1" id="reportEvery">
+        <label for="frames">Benchmark frames</label>
+        <input type="number" min="1" value="300" step="10" id="frames">
+        <label for="warmupFrames">Warm-up frames</label>
+        <input type="number" min="0" value="60" step="10" id="warmupFrames">
+        <button type="button" id="run">Run benchmark</button>
+        <button type="button" id="reset">Reset measurements</button>
     </form>
     <div id="chart"></div>
+    <h2>Performance report</h2>
+    <p>The benchmark creates and moves the brush automatically.</p>
+    <pre id="performanceReport">Waiting for samples…</pre>
 
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/seedrandom@3.0.5/seedrandom.min.js"></script>
     <script src="../dist/TimeWidget.js"></script>
 
     <script>
-        let initTime = 0;
-        let finTime = 0;
-
         let linesElement = document.querySelector('#lines');
         let pointsElement = document.querySelector('#pointsPerLines');
         let resultElement = document.querySelector('#result');
+        let maxSamplesElement = document.querySelector('#maxSamples');
+        let reportEveryElement = document.querySelector('#reportEvery');
+        let performanceReportElement = document.querySelector('#performanceReport');
         updateTotalPoints();
 
 
@@ -35,7 +48,9 @@
             x: "xCoord",
             y: "yCoord",
             id: "id",
-            autoUpdate: false,
+            autoUpdate: true,
+            showGroupMedian: false,
+            performanceMonitoring: performanceOptions(),
         });
 
         linesElement.addEventListener('change', e => {
@@ -43,30 +58,95 @@
             updateTotalPoints()
         });
         pointsElement.addEventListener('change', e => {
-            target.ts.data(generateData(pointsElement.value,pointsElement.value))
+            target.ts.data(generateData(linesElement.value,pointsElement.value))
             updateTotalPoints()
             ;});
+
+        maxSamplesElement.addEventListener('change', configurePerformance);
+        reportEveryElement.addEventListener('change', configurePerformance);
+        document.querySelector('#reset').addEventListener('click', () => {
+            target.ts.performance.reset();
+            performanceReportElement.textContent = 'Waiting for samples…';
+        });
+        document.querySelector('#run').addEventListener('click', event => runBenchmark(event.currentTarget));
+
+        async function runBenchmark(button = document.querySelector('#run')) {
+            button.disabled = true;
+            performanceReportElement.textContent = 'Running…';
+            const lines = Math.max(1, Number(linesElement.value));
+            const pointsPerLine = Math.max(2, Number(pointsElement.value));
+            const frames = Math.max(1, Number(document.querySelector('#frames').value));
+            const warmupFrames = Math.max(0, Number(document.querySelector('#warmupFrames').value));
+
+            // Always rebuild the dataset from the current form values. Relying
+            // on the inputs' change event kept stale data when Run was clicked
+            // immediately after editing a field.
+            target.ts.data(generateData(lines, pointsPerLine));
+            resultElement.value = lines * pointsPerLine;
+
+            const report = await target.ts.performance.runBrush({
+                frames,
+                warmupFrames,
+                brushHeight: 0.25,
+            });
+            performanceReportElement.textContent = JSON.stringify({
+                configuration: {
+                    lines,
+                    pointsPerLine,
+                    totalPoints: lines * pointsPerLine,
+                    frames,
+                    warmupFrames,
+                },
+                metrics: report,
+            }, null, 2);
+            button.disabled = false;
+        }
+
+        function performanceOptions() {
+            return {
+                maxSamples: Number(maxSamplesElement.value),
+                reportEvery: Number(reportEveryElement.value),
+                log: false,
+                onReport: report => {
+                    performanceReportElement.textContent = JSON.stringify(report, null, 2);
+                },
+            };
+        }
+
+        function configurePerformance() {
+            target.ts.performance.configure(performanceOptions());
+            target.ts.performance.reset();
+        }
 
         function updateTotalPoints() {
             resultElement.value = linesElement.value * pointsElement.value;
         }
 
-        function calculateFrameTime () {
-            finTime = performance.now();
-            frameTimeElement.textContent = `Frame Time: ${finTime - initTime.toFixed(2)} ms`
-            initTime = performance.now();
-
-        }
-
         function generateData(lines, pointsPerLines) {
-            Math.seedrandom('Seed'); // Reseed to obtain equal values beetween executions of the function
+            // Deterministic, correlated time series: a baseline, a long-term
+            // trend, seasonality and autocorrelated noise. This is closer to
+            // sensor, financial or environmental data than independent points.
+            Math.seedrandom('TimeWidget performance benchmark');
             let data = [];
             for (let i = 0; i < lines; i++) {
+                const baseline = 15 + Math.random() * 70;
+                const trend = (Math.random() - 0.5) * 25;
+                const amplitude = 2 + Math.random() * 7;
+                const frequency = 0.75 + Math.random() * 1.5;
+                const phase = Math.random() * Math.PI * 2;
+                let noise = (Math.random() - 0.5) * 3;
+
                 for (let j = 0; j < pointsPerLines; j++) {
+                    const time = pointsPerLines === 1 ? 0 : j / (pointsPerLines - 1);
+                    noise = noise * 0.75 + (Math.random() - 0.5) * 2.5;
                     data.push({
                         id: i,
-                        xCoord: Math.random() * 100,
-                        yCoord: Math.random() * 100,
+                        xCoord: time * 100,
+                        yCoord:
+                            baseline +
+                            trend * time +
+                            amplitude * Math.sin(Math.PI * 2 * frequency * time + phase) +
+                            noise,
                     })
                 }
             }

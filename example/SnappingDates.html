@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TimeWidget - snapping con fechas</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        color: #172033;
+        background: #f5f7fb;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .panel {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: end;
+        margin: 16px 0;
+        padding: 16px;
+        border: 1px solid #d9dfeb;
+        border-radius: 10px;
+        background: white;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-weight: 600;
+      }
+
+      input,
+      button {
+        min-height: 36px;
+        padding: 6px 10px;
+        border: 1px solid #aeb8ca;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      button {
+        color: white;
+        border-color: #3659d9;
+        background: #3659d9;
+        cursor: pointer;
+      }
+
+      code {
+        padding: 2px 5px;
+        border-radius: 4px;
+        background: #edf0f7;
+      }
+
+      #coordinates {
+        font-family: ui-monospace, monospace;
+      }
+
+      #widget {
+        overflow-x: auto;
+        padding: 12px;
+        border: 1px solid #d9dfeb;
+        border-radius: 10px;
+        background: white;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Snapping con fechas en el eje X</h1>
+      <p>
+        El intervalo se pasa directamente a <code>snapX</code> como una duración
+        de date-fns: <code>{ days: 7 }</code>. La cuadrícula temporal comienza
+        el 4 de enero de 2026.
+      </p>
+
+      <div class="panel">
+        <label>
+          Intervalo X (días)
+          <input id="snap-x-days" type="number" min="1" step="1" value="7" />
+        </label>
+        <label>
+          Intervalo Y
+          <input id="snap-y" type="number" min="1" step="1" value="10" />
+        </label>
+        <button id="apply" type="button">Aplicar y reiniciar</button>
+      </div>
+
+      <div class="panel">
+        <strong>Brush ajustado:</strong>
+        <span id="coordinates">Sin selección</span>
+      </div>
+
+      <div id="widget"></div>
+    </main>
+
+    <script src="https://d3js.org/d3.v7.js"></script>
+    <script src="../dist/TimeWidget.js"></script>
+    <script>
+      const domainStart = new Date(2026, 0, 4);
+      const domainEnd = new Date(2026, 2, 1);
+      const formatDate = d3.timeFormat("%Y-%m-%d");
+
+      const mount = document.getElementById("widget");
+      const coordinates = document.getElementById("coordinates");
+      const snapXDaysInput = document.getElementById("snap-x-days");
+      const snapYInput = document.getElementById("snap-y");
+      const applyButton = document.getElementById("apply");
+
+      const data = [];
+      const series = [
+        { id: "Sensor norte", phase: 0, group: "Norte" },
+        { id: "Sensor sur", phase: 1.7, group: "Sur" },
+        { id: "Sensor este", phase: 3.4, group: "Este" },
+      ];
+
+      for (const item of series) {
+        d3.timeDay.range(domainStart, d3.timeDay.offset(domainEnd, 1)).forEach(
+          (date, index) => {
+            data.push({
+              id: item.id,
+              group: item.group,
+              date,
+              value: 50 + 27 * Math.sin(index / 7 + item.phase),
+            });
+          }
+        );
+      }
+
+      let widget;
+
+      function showBrushCoordinates() {
+        if (!widget.brushGroups) return;
+
+        for (const group of widget.brushGroups.values()) {
+          for (const brush of group.brushes.values()) {
+            if (brush.selectionDomain) {
+              const [[x0, y0], [x1, y1]] = brush.selectionDomain;
+              coordinates.textContent =
+                `[[${formatDate(x0)}, ${y0.toFixed(0)}], ` +
+                `[${formatDate(x1)}, ${y1.toFixed(0)}]]`;
+              return;
+            }
+          }
+        }
+
+        coordinates.textContent = "Sin selección";
+      }
+
+      function renderWidget() {
+        const snapX = { days: Number(snapXDaysInput.value) };
+        const snapY = Number(snapYInput.value);
+
+        mount.replaceChildren();
+        coordinates.textContent = "Sin selección";
+
+        widget = TimeWidget(data, {
+          x: "date",
+          y: "value",
+          id: "id",
+          color: "group",
+          xDomain: [domainStart, domainEnd],
+          yDomain: [0, 100],
+          xLabel: "Fecha",
+          yLabel: "Valor",
+          width: 900,
+          height: 520,
+          showGroupMedian: false,
+          fmtX: formatDate,
+          fmtY: d3.format(".0f"),
+          snapX,
+          snapY,
+          filters: [
+            {
+              name: "Ejemplo temporal",
+              isEnable: true,
+              isActive: true,
+              brushes: [
+                {
+                  selectionDomain: [
+                    [new Date(2026, 0, 8), 87],
+                    [new Date(2026, 1, 18), 24],
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+
+        widget.addEventListener("input", showBrushCoordinates);
+        mount.appendChild(widget);
+        showBrushCoordinates();
+      }
+
+      applyButton.addEventListener("click", renderWidget);
+      renderWidget();
+    </script>
+  </body>
+</html>

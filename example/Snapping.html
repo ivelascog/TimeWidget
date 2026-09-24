@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TimeWidget - ejemplo de snapping</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        padding: 24px;
+        color: #172033;
+        background: #f5f7fb;
+      }
+
+      .page {
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+
+      .controls,
+      .status {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: end;
+        margin: 16px 0;
+        padding: 16px;
+        border: 1px solid #d9dfeb;
+        border-radius: 10px;
+        background: white;
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        font-weight: 600;
+      }
+
+      input,
+      button {
+        box-sizing: border-box;
+        min-height: 36px;
+        padding: 6px 10px;
+        border: 1px solid #aeb8ca;
+        border-radius: 6px;
+        font: inherit;
+      }
+
+      button {
+        color: white;
+        border-color: #3659d9;
+        background: #3659d9;
+        cursor: pointer;
+      }
+
+      #widget {
+        overflow-x: auto;
+        padding: 12px;
+        border: 1px solid #d9dfeb;
+        border-radius: 10px;
+        background: white;
+      }
+
+      #coordinates {
+        font-family: ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <h1>Prueba de snapping de TimeWidget</h1>
+      <p>
+        Crea, mueve o redimensiona un brush. Sus extremos solamente podrán
+        quedar en múltiplos de los intervalos indicados, tomando como origen el
+        límite inferior de cada dominio.
+      </p>
+
+      <div class="controls">
+        <label>
+          Intervalo X
+          <input id="snap-x" type="number" min="1" step="1" value="10" />
+        </label>
+        <label>
+          Intervalo Y
+          <input id="snap-y" type="number" min="1" step="1" value="10" />
+        </label>
+        <button id="apply" type="button">Aplicar y reiniciar</button>
+      </div>
+
+      <div class="status">
+        <strong>Coordenadas del brush:</strong>
+        <span id="coordinates">Sin selección</span>
+      </div>
+
+      <div id="widget"></div>
+    </main>
+
+    <script src="https://d3js.org/d3.v7.js"></script>
+    <script src="../dist/TimeWidget.js"></script>
+    <script>
+      const mount = document.getElementById("widget");
+      const coordinates = document.getElementById("coordinates");
+      const snapXInput = document.getElementById("snap-x");
+      const snapYInput = document.getElementById("snap-y");
+      const applyButton = document.getElementById("apply");
+
+      const data = [];
+      const series = [
+        { id: "Serie A", phase: 0, color: "A" },
+        { id: "Serie B", phase: 1.8, color: "B" },
+        { id: "Serie C", phase: 3.6, color: "C" },
+      ];
+
+      for (const item of series) {
+        for (let x = 0; x <= 100; x += 2) {
+          data.push({
+            id: item.id,
+            group: item.color,
+            x,
+            y: 50 + 28 * Math.sin(x / 13 + item.phase),
+          });
+        }
+      }
+
+      let widget;
+
+      function showBrushCoordinates() {
+        const groups = widget.brushGroups;
+        if (!groups) return;
+        for (const group of groups.values()) {
+          for (const brush of group.brushes.values()) {
+            if (brush.selectionDomain) {
+              const [[x0, y0], [x1, y1]] = brush.selectionDomain;
+              coordinates.textContent =
+                `[[${x0.toFixed(2)}, ${y0.toFixed(2)}], ` +
+                `[${x1.toFixed(2)}, ${y1.toFixed(2)}]]`;
+              return;
+            }
+          }
+        }
+        coordinates.textContent = "Sin selección";
+      }
+
+      function renderWidget() {
+        const snapX = Number(snapXInput.value);
+        const snapY = Number(snapYInput.value);
+
+        mount.replaceChildren();
+        coordinates.textContent = "Sin selección";
+
+        widget = TimeWidget(data, {
+          x: "x",
+          y: "y",
+          id: "id",
+          color: "group",
+          xDomain: [0, 100],
+          yDomain: [0, 100],
+          xLabel: "X",
+          yLabel: "Y",
+          width: 900,
+          height: 520,
+          showGroupMedian: false,
+          fmtX: d3.format(".0f"),
+          fmtY: d3.format(".0f"),
+          snapX,
+          snapY,
+          filters: [
+            {
+              name: "Ejemplo",
+              isEnable: true,
+              isActive: true,
+              brushes: [
+                {
+                  selectionDomain: [
+                    [13, 87],
+                    [47, 24],
+                  ],
+                },
+              ],
+            },
+          ],
+        });
+
+        widget.addEventListener("input", showBrushCoordinates);
+        mount.appendChild(widget);
+        showBrushCoordinates();
+      }
+
+      applyButton.addEventListener("click", renderWidget);
+      renderWidget();
+    </script>
+  </body>
+</html>

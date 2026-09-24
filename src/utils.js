@@ -1,81 +1,12 @@
 import * as d3 from "d3";
 
 let DEBUG = false;
-export let PERFORMANCELOG = true;
 let before;
-
-let performanceMetrics = {
-  collision: [],
-  render: [],
-  totalCpu: [],
-  frame: []
-};
 
 
 export function log() {
   if (DEBUG) console.log(performance.now() - before, ...arguments);
   before = performance.now();
-}
-
-function addMetric(name, value) {
-  performanceMetrics[name].push(value);
-  if (performanceMetrics[name].length > 50) {
-    performanceMetrics[name].shift();
-  }
-}
-
-// A measurement belongs to exactly one brush update. Passing it through the
-// selection callback prevents timestamps from different animation frames from
-// being paired together.
-export function startPerformanceMeasurement() {
-  const now = performance.now();
-  return {startedAt: now, selectionStartedAt: now};
-}
-
-export function finishSelectionMeasurement(measurement) {
-  if (!measurement) return;
-  measurement.selectionEndedAt = performance.now();
-  addMetric(
-      "collision",
-      measurement.selectionEndedAt - measurement.selectionStartedAt
-  );
-}
-
-export function startRenderMeasurement(measurement) {
-  if (!measurement) return;
-  measurement.renderStartedAt = performance.now();
-}
-
-export function finishRenderMeasurement(measurement) {
-  if (!measurement || measurement.renderStartedAt === undefined) return;
-  const now = performance.now();
-  addMetric("render", now - measurement.renderStartedAt);
-  addMetric("totalCpu", now - measurement.startedAt);
-
-  // A requestAnimationFrame callback runs before the browser paints. The next
-  // callback is therefore the closest timing signal available from JavaScript
-  // for the frame that has just been submitted. It includes waiting for the
-  // next frame and the browser's paint/compositing work, although it is not a
-  // pixel-perfect presentation timestamp.
-  window.requestAnimationFrame(() => {
-    addMetric("frame", performance.now() - measurement.startedAt);
-    printPerfomancesAvgs();
-  });
-}
-
-export function printPerfomancesAvgs() {
-  console.log({
-    collisionAvg: getAverage(performanceMetrics.collision),
-    renderAvg: getAverage(performanceMetrics.render),
-    totalCpuAvg: getAverage(performanceMetrics.totalCpu),
-    frameAvg: getAverage(performanceMetrics.frame),
-    // Approximation of the observable frame cadence, including browser paint.
-    estimatedFps: 1000 / getAverage(performanceMetrics.frame),
-    samplesCollision: performanceMetrics.collision.length,
-    samplesRender: performanceMetrics.render.length,
-    samplesCpu: performanceMetrics.totalCpu.length,
-    samplesFrame: performanceMetrics.frame.length,
-  });
 }
 
 export function darken(color, k = 1) {

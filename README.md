@@ -190,11 +190,22 @@ This section will show all possible options grouped by categories.
  - **referenceCurves**:  Specifies a Json object with the information of the reference lines.
  - **fmtX**: Function, how to format x points in the tooltip. Note that it must conform to the data type provided in X.
  - **fmtY**: Function, how to format x points in the tooltip. Note that it must conform to the data type provided in Y.
+ - **snapX**: Optional positive interval in X domain units to which both horizontal brush edges are snapped. For time scales, use a date-fns Duration such as `{ days: 7 }` or a number of milliseconds. TimeWidget converts durations to milliseconds before configuring the brush interaction. The grid starts at the lower X-domain boundary.
+ - **snapY**: Optional positive interval in Y domain units to which both vertical brush edges are snapped. The grid starts at the lower Y-domain boundary.
  - **xLabel**: Label to show in the X axis
  - **yLabel**: Label to show in the Y axis
  - **xTicks**: Allows to use custom strings as ticks on the X-axis independently of the X-scale. A vector of [xValue,Label] pairs is expected. Note that only the defined elements are displayed and xValue must belong to the domain of X.
  - **yTicks**: Allows to use custom strings as ticks on the y-axis independently of the y-scale. A vector of [yValue,Label] pairs is expected. Note that only the defined elements are displayed and yValue must belong to the domain of X.
  - **filters**: Array of predefined TimeGroups and TimeBoxes. [Example](https://observablehq.com/d/29228e86855505e2?collection=@ivelascog/timesearcherplus)
+
+For example, this constrains every TimeBox edge to multiples of 15 on X and 5 on Y:
+
+```js
+const target = TimeWidget(data, {
+  snapX: 15,
+  snapY: 5,
+});
+```
 ### Color Configuration
  - **defaultAlpha**: Default transparency (when no selection is active) of drawn lines
  - **selectedAlpha**: Transparency of selected lines
@@ -218,6 +229,48 @@ This section will show all possible options grouped by categories.
 ### CallBacks
  - **updateCallback**: (data) => doSomethingWithData
  - **statusCallback**: (status) => doSomethingWithStatus
+
+### Performance measurements
+
+For repeatable browser measurements, enable the lightweight monitor and move a
+brush as usual. Every `reportEvery` measured frames it reports sustained FPS
+and the p50/p95/p99 percentiles for frame time, collision detection, rendering
+and total processing time. Times are expressed in milliseconds. FPS `p5` and
+`p1` correspond to the slow-tail frame-time `p95` and `p99` respectively.
+
+```js
+const target = TimeWidget(data, {
+  x: "Date",
+  y: "Open",
+  id: "stock",
+  performanceMonitoring: {
+    maxSamples: 300,
+    reportEvery: 60,
+    log: true,
+  },
+});
+
+target.ts.performance.reset(); // start a clean experimental run
+const report = target.ts.performance.report(); // JSON-serializable results
+
+// Or run 300 rendering frames automatically and receive the final report:
+const automaticReport = await target.ts.performance.run({ frames: 300 });
+
+// Include selection/collision work by moving a brush automatically:
+const brushReport = await target.ts.performance.runBrush({
+  frames: 300,
+  warmupFrames: 60,
+  cycles: 3,
+  brushHeight: 0.25,
+});
+```
+
+Use `performanceMonitoring: false` to disable the instrumentation. An
+`onReport(report)` callback can be supplied instead of (or in addition to) the
+console output. `runBrush()` replaces the current filters with a deterministic
+brush and moves it horizontally, so its report also includes selection and
+collision timings without user interaction. The first `warmupFrames` frames
+are executed but discarded from all metrics (60 by default).
 ### Rendering
  - **brushShadow**: Determines how the shadow will be applied to the TimeBoxes belonging to the active TimeGroup.
  - **showGroupMedian**: If active show a line with the median of the enabled groups.

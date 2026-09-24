@@ -1,13 +1,17 @@
 ﻿import * as d3 from "d3";
 import { add, intervalToDuration, sub } from "date-fns";
+import createPerformanceBenchmark from "./PerformanceBenchmark.js";
+import {
+  finishPerformanceMeasurement,
+  finishRenderMeasurement,
+  PERFORMANCELOG,
+  startRenderMeasurement,
+} from "./PerformanceMonitor.js";
 
 import {
-  finishRenderMeasurement,
   log,
   normalizeDomain,
-  PERFORMANCELOG,
   resolveDomains,
-  startRenderMeasurement,
 } from "./utils.js";
 
 import TimelineDetails from "./TimelineDetails.js";
@@ -38,6 +42,8 @@ function TimeWidget(
     fmtY = d3.format(".1f"), // Function, how to format x points in the tooltip
     stepX = { days: 10 }, // Defines the step used, both in the spinboxes and with the arrows on the X axis.
     stepY = 1, // // Defines the step used, both in the spinboxes and with the arrows on the Y axis.
+    snapX = null, // Domain interval to which brush X coordinates are snapped. Dates accept a date-fns Duration or milliseconds.
+    snapY = null, // Domain interval to which brush Y coordinates are snapped.
     xScale, //It allows to pass a scale of d3 with its parameters, except for the domain which is defined by the xDomain parameter.
     yScale = d3.scaleLinear(), //It allows to pass a scale of d3 with its parameters, except for the domain which is defined by the yDomain parameter.
     xDomain, // Defines the domain to be used in the x scale.
@@ -85,6 +91,7 @@ function TimeWidget(
     maxTimelines = null, // Set to a value to limit the number of distinct timelines to show
     xPartitions = 10, // Partitions performed on the X-axis for the collision acceleration algorithm.
     yPartitions = 10, // Partitions performed on the Y-axis for the collision acceleration algorithm.
+    performanceMonitoring, // false to disable, or {maxSamples, reportEvery, log, onReport}
     /* Options */
     medianNumBins = 10, // Number of bins used to compute the group median.
     medianLineDash = [7], // Selected group median line dash pattern canvas style
@@ -163,6 +170,8 @@ function TimeWidget(
   ts.brushGroupSize = brushGroupSize;
   ts.stepX = stepX;
   ts.stepY = stepY;
+  ts.snapX = snapX;
+  ts.snapY = snapY;
   ts.medianLineAlpha = medianLineAlpha;
   ts.medianLineWidth = medianLineWidth;
   ts.medianLineDash = medianLineDash;
@@ -706,6 +715,11 @@ function TimeWidget(
       .join("g")
       .attr("id", "brushes");
 
+    const snapXMilliseconds =
+      snapX !== null && typeof snapX === "object"
+        ? +add(overviewX.domain()[0], snapX) - +overviewX.domain()[0]
+        : snapX;
+
     brushes = brushInteraction({
       ts,
       element: gBrushes.node(),
@@ -717,6 +731,8 @@ function TimeWidget(
       x,
       y,
       brushShadow,
+      snapX: snapXMilliseconds,
+      snapY,
       fmtY,
       fmtX: fmtX,
       scaleX: overviewX,
@@ -1332,6 +1348,7 @@ function TimeWidget(
 
     renderBrushesControls();
     triggerValueUpdate(renderSelected);
+    if (PERFORMANCELOG) finishPerformanceMeasurement(measurement);
   }
 
   // Called every time the brushGroups changes
@@ -1606,6 +1623,19 @@ function TimeWidget(
   ts.getExtent = () => {
     return ts.fullExtent;
   };
+
+  ts.performance = createPerformanceBenchmark({
+    getBrushes: () => brushes,
+    getExtent: () => ts.fullExtent,
+    render: (measurement) =>
+      renderNow(
+        renderSelected,
+        renderNotSelected,
+        brushes.hasSelection(),
+        measurement
+      ),
+    options: performanceMonitoring,
+  });
 
   ts.duplicateSelectedGroup = () => {
     brushes.duplicateBrushGroup();

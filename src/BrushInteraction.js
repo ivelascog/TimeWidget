@@ -4,16 +4,20 @@ import BVH from "./BVH";
 import brushTooltipEditable from "./BrushTooltipEditable.js";
 import BrushContextMenu from "./BrushContextMenu.js";
 import {
+  finishSelectionMeasurement,
+  PERFORMANCELOG,
+  startPerformanceMeasurement,
+} from "./PerformanceMonitor.js";
+
+import {
+  BrushAggregation,
+  BrushModes,
   clampToDomain,
   compareSets,
   darken,
-  finishSelectionMeasurement,
   isInsideDomain,
-  PERFORMANCELOG,
-  startPerformanceMeasurement,
-} from "./utils.js";
-
-import {BrushAggregation, BrushModes, log} from "./utils";
+  log,
+} from "./utils";
 
 function brushInteraction({
   ts,
@@ -32,6 +36,8 @@ function brushInteraction({
   fmtY,
   updateTime,
   brushShadow,
+  snapX,
+  snapY,
   minBrushSize = 5, // Min size in pixels of brushes
   selectionCallback = () => {}, // (dataSelected, dataNotSelected, hasSelection) => {} Called when selected elements change
   groupsCallback = () => {}, // (groups) => {} Called when information of the groups changes (not the selection made by them)
@@ -39,6 +45,11 @@ function brushInteraction({
   selectedBrushCallback = () => {}, // (brush) => {} Called when the selected Brush changes.
   statusCallback = () => {}, // (status) => {}
 }) {
+  const snapXInterval = Number(snapX);
+  const snapYInterval = Number(snapY);
+  const hasSnapX = Number.isFinite(snapXInterval) && snapXInterval > 0;
+  const hasSnapY = Number.isFinite(snapYInterval) && snapYInterval > 0;
+
   let me = {},
     brushSize,
     brushesGroup,
@@ -131,6 +142,7 @@ function brushInteraction({
   }
 
   const onBrushStart = (e, brushObject) => {
+    if (e.sourceEvent === undefined) return;
     log("💡  onBrushStart", brushObject, arguments.length);
     if (!brushObject || !brushObject.length) {
       // TODO
@@ -162,6 +174,7 @@ function brushInteraction({
   function onBrushEnd({ selection, sourceEvent }, brush) {
     if (sourceEvent === undefined) return;
     if (selection) {
+      selection = snapSelectionPixels(selection);
       let [[x0, y0], [x1, y1]] = selection;
       if (
         Math.abs(x0 - x1) < minBrushSize &&
@@ -243,6 +256,40 @@ function brushInteraction({
     return selectionDomain.map(([x, y]) => [scaleX(x), scaleY(y)]);
   }
 
+  function snapSelectionDomain(selection) {
+    return selection.map(([xValue, yValue]) => [
+      hasSnapX
+          ? snapCoordinate(xValue, snapXInterval, scaleX.domain())
+          : xValue,
+      hasSnapY
+          ? snapCoordinate(yValue, snapYInterval, scaleY.domain())
+          : yValue,
+    ]);
+  }
+
+  function snapSelectionPixels(selection) {
+    return getSelectionPixels(snapSelectionDomain(getSelectionDomain(selection)));
+  }
+
+  function snapCoordinate(value, interval, domain) {
+    const numericValue = +value;
+    const origin = +domain[0];
+    const domainEnd = +domain[1];
+    const lower = Math.min(origin, domainEnd);
+    const upper = Math.max(origin, domainEnd);
+    const minIndex = Math.ceil((lower - origin) / interval);
+    const maxIndex = Math.floor((upper - origin) / interval);
+    const index = Math.max(
+        minIndex,
+        Math.min(maxIndex, Math.round((numericValue - origin) / interval))
+    );
+    const snapped = origin + index * interval;
+
+    return value instanceof Date || domain[0] instanceof Date
+        ? new Date(snapped)
+        : snapped;
+  }
+
   function scheduleInteractionFrame() {
     if (interactionFrame !== null) return;
     interactionFrame = window.requestAnimationFrame(() => {
@@ -303,6 +350,7 @@ function brushInteraction({
 
     // dont execute this method when move brushes programmatically (sourceEvent === null) or when there is no selection
     if (sourceEvent === undefined || !selection) return;
+    selection = snapSelectionPixels(selection);
     const measurement = PERFORMANCELOG ? startPerformanceMeasurement() : null;
     //log("brushed", brush);
     brush[1].selection = selection;
@@ -369,6 +417,7 @@ function brushInteraction({
 
   function updateSelectedCoordinates({ selection }, brush = selectedBrush) {
     if (!selectedBrush || !brush || brush[0] !== selectedBrush[0]) return;
+    selection = snapSelectionPixels(selection);
     let selectionDomain = getSelectionDomain(selection);
     changeSelectedCoordinatesCallback(selectionDomain);
   }
@@ -421,15 +470,16 @@ function brushInteraction({
     x1 += distX;
     y0 += distY;
     y1 += distY;
-    let d3Brush = gBrushes.selectAll("#brush-" + brushId);
-    d3Brush.call(brush.brush.move, [
-      [x0, y0],
-      [x1, y1],
-    ]);
-    brush.selection = [
+    let selection = [
       [x0, y0],
       [x1, y1],
     ];
+    if (hasSnapX || hasSnapY) {
+      selection = snapSelectionPixels(selection);
+    }
+    let d3Brush = gBrushes.selectAll("#brush-" + brushId);
+    d3Brush.call(brush.brush.move, selection);
+    brush.selection = selection;
 
     updateCirclesSelected(d3Brush,brush);
     brush.selectionDomain = getSelectionDomain(brush.selection);
@@ -448,7 +498,16 @@ function brushInteraction({
     }
     const [triggerId, triggerBrush] = trigger;
 
-    if (!selection || !triggerBrush.isSelected) return;
+    if (!selection) return;
+
+    if (hasSnapX || hasSnapY) {
+      selection = snapSelectionPixels(selection);
+      gBrushes
+        .selectAll("#brush-" + triggerId)
+        .call(triggerBrush.brush.move, selection);
+    }
+
+    if (!triggerBrush.isSelected) return;
 
     let [[x0, y0]] = selection;
     let distX = x0 - triggerBrush.selection[0][0];
@@ -542,6 +601,8 @@ function brushInteraction({
 
   function showBrushTooltip({ selection, sourceEvent }, brush) {
     if (!selection || sourceEvent === undefined) return;
+
+    selection = snapSelectionPixels(selection);
 
     let selectionInverted = selection.map(([x, y]) => [
       scaleX.invert(+x),
@@ -970,6 +1031,11 @@ function brushInteraction({
     if (y0 < y1) {
       [y0, y1] = [y1, y0];
     }
+
+    [[x0, y0], [x1, y1]] = snapSelectionDomain([
+      [x0, y0],
+      [x1, y1],
+    ]);
 
     let x0p = scaleX(x0);
     let x1p = scaleX(x1);
