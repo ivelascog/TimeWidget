@@ -232,16 +232,23 @@ function brushInteraction({
       brushCount,
       brushesGroup.get(brushGroupSelected).brushes.get(brushCount),
     ];
-    // Set events for Brush
-    brush.on("brush.move", moveSelectedBrushes);
-    brush.on("brush.Selected", tSelectionCall);
-    if (ts.autoUpdate) {
-      // Update brushSelection only if autoUpdate
-      brush.on("brush.brushed", tBrushed);
-    }
-    if (ts.showBrushTooltip) {
-      brush.on("brush.show", (event) => tShowTooltip(event, brushObject));
-    }
+    // Validate a multi-selection movement before notifying the other handlers.
+    // If it is rejected, only the trigger brush is restored and no state or
+    // tooltip update is emitted for that position.
+    brush.on("brush.move", (event) => {
+      if (!canMoveSelectedBrushes(event)) {
+        const [triggerId, triggerBrush] = brushObject;
+        gBrushes
+          .selectAll("#brush-" + triggerId)
+          .call(triggerBrush.brush.move, triggerBrush.selection);
+        return;
+      }
+
+      moveSelectedBrushes(event, brushObject);
+      tSelectionCall(event, brushObject);
+      if (ts.autoUpdate) tBrushed(event, brushObject);
+      if (ts.showBrushTooltip) tShowTooltip(event, brushObject);
+    });
     brush.on("end", onBrushEnd);
     if (extent) brush.extent(extent);
 
@@ -485,6 +492,57 @@ function brushInteraction({
     brush.selectionDomain = getSelectionDomain(brush.selection);
   }
 
+  function canMoveSelectedBrushes({ selection, sourceEvent, target }) {
+    // Programmatic and empty events do not represent a user movement.
+    if (sourceEvent === undefined || !selection || !extent) return true;
+
+    let triggerId;
+    let triggerBrush;
+    const selectedBrushes = [];
+
+    for (const brushGroup of brushesGroup.values()) {
+      for (const brushEntry of brushGroup.brushes) {
+        const [brushId, brush] = brushEntry;
+        if (brush.brush === target) {
+          triggerId = brushId;
+          triggerBrush = brush;
+        }
+        if (brush.isSelected && brush.selection) {
+          selectedBrushes.push(brushEntry);
+        }
+      }
+    }
+
+    // Non-selected brushes move independently and are already constrained by d3.
+    if (!triggerBrush || !triggerBrush.isSelected) return true;
+    if (!triggerBrush.selection) return false;
+
+    if (hasSnapX || hasSnapY) selection = snapSelectionPixels(selection);
+
+    const [[extentX0, extentY0], [extentX1, extentY1]] = extent;
+    const minX = Math.min(extentX0, extentX1);
+    const maxX = Math.max(extentX0, extentX1);
+    const minY = Math.min(extentY0, extentY1);
+    const maxY = Math.max(extentY0, extentY1);
+    const isInsideExtent = ([[x0, y0], [x1, y1]]) =>
+      Math.min(x0, x1) >= minX &&
+      Math.max(x0, x1) <= maxX &&
+      Math.min(y0, y1) >= minY &&
+      Math.max(y0, y1) <= maxY;
+
+    if (!isInsideExtent(selection)) return false;
+
+    const distX = selection[0][0] - triggerBrush.selection[0][0];
+    const distY = selection[0][1] - triggerBrush.selection[0][1];
+
+    return selectedBrushes.every(([brushId, brush]) => {
+      if (brushId === triggerId) return true;
+      return isInsideExtent(
+        brush.selection.map(([x, y]) => [x + distX, y + distY])
+      );
+    });
+  }
+
   // Move all selected brushes the same amount of the triggerBrush
   function moveSelectedBrushes({ selection, sourceEvent }, trigger) {
     // dont execute this method when move brushes programmatically
@@ -502,12 +560,15 @@ function brushInteraction({
 
     if (hasSnapX || hasSnapY) {
       selection = snapSelectionPixels(selection);
+    }
+
+    if (!triggerBrush.isSelected) return;
+
+    if (hasSnapX || hasSnapY) {
       gBrushes
         .selectAll("#brush-" + triggerId)
         .call(triggerBrush.brush.move, selection);
     }
-
-    if (!triggerBrush.isSelected) return;
 
     let [[x0, y0]] = selection;
     let distX = x0 - triggerBrush.selection[0][0];
@@ -1306,4 +1367,7 @@ export function cloneBrushGroupPayload(group, { suffix = " (copy)" } = {}) {
   };
 }
 
+// Returns false when applying the trigger's displacement would place any
+// selected brush outside the drawable extent. This keeps multi-selection
+// movement atomic: either every brush can move, or none of them does.
 export default brushInteraction;
