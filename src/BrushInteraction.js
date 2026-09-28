@@ -15,7 +15,7 @@ import {
   clampToDomain,
   compareSets,
   darken,
-  isInsideDomain,
+  isInsideDomain, isInsideExtent,
   log,
 } from "./utils";
 
@@ -232,17 +232,9 @@ function brushInteraction({
       brushCount,
       brushesGroup.get(brushGroupSelected).brushes.get(brushCount),
     ];
-    // Validate a multi-selection movement before notifying the other handlers.
-    // If it is rejected, only the trigger brush is restored and no state or
-    // tooltip update is emitted for that position.
     brush.on("brush.move", (event) => {
-      if (!canMoveSelectedBrushes(event)) {
-        const [triggerId, triggerBrush] = brushObject;
-        gBrushes
-          .selectAll("#brush-" + triggerId)
-          .call(triggerBrush.brush.move, triggerBrush.selection);
-        return;
-      }
+      if (!canMoveSelectedBrushes(event))
+        event = adjustSelectedBrushes(event)
 
       moveSelectedBrushes(event, brushObject);
       tSelectionCall(event, brushObject);
@@ -513,9 +505,41 @@ function brushInteraction({
       }
     }
 
-    // Non-selected brushes move independently and are already constrained by d3.
-    if (!triggerBrush || !triggerBrush.isSelected) return true;
-    if (!triggerBrush.selection) return false;
+    if (hasSnapX || hasSnapY) selection = snapSelectionPixels(selection);
+
+    const distX = selection[0][0] - triggerBrush.selection[0][0];
+    const distY = selection[0][1] - triggerBrush.selection[0][1];
+
+    return selectedBrushes.every(([brushId, brush]) =>
+      isInsideExtent(
+        brushId === triggerId
+          ? selection
+          : brush.selection.map(([x, y]) => [x + distX, y + distY]),
+        extent
+      )
+    );
+  }
+
+  function adjustSelectedBrushes(event) {
+    let {selection, sourceEvent, target} = event;
+    if (sourceEvent === undefined || !selection || !extent) return true;
+
+    let triggerId;
+    let triggerBrush;
+    const selectedBrushes = [];
+
+    for (const brushGroup of brushesGroup.values()) {
+      for (const brushEntry of brushGroup.brushes) {
+        const [brushId, brush] = brushEntry;
+        if (brush.brush === target) {
+          triggerId = brushId;
+          triggerBrush = brush;
+        }
+        if (brush.isSelected && brush.selection) {
+          selectedBrushes.push(brushEntry);
+        }
+      }
+    }
 
     if (hasSnapX || hasSnapY) selection = snapSelectionPixels(selection);
 
@@ -524,23 +548,53 @@ function brushInteraction({
     const maxX = Math.max(extentX0, extentX1);
     const minY = Math.min(extentY0, extentY1);
     const maxY = Math.max(extentY0, extentY1);
-    const isInsideExtent = ([[x0, y0], [x1, y1]]) =>
-      Math.min(x0, x1) >= minX &&
-      Math.max(x0, x1) <= maxX &&
-      Math.min(y0, y1) >= minY &&
-      Math.max(y0, y1) <= maxY;
-
-    if (!isInsideExtent(selection)) return false;
-
     const distX = selection[0][0] - triggerBrush.selection[0][0];
     const distY = selection[0][1] - triggerBrush.selection[0][1];
+    const candidateSelections = selectedBrushes.map(([brushId, brush]) =>
+        brushId === triggerId
+            ? selection
+            : brush.selection.map(([x, y]) => [x + distX, y + distY])
+    );
+    const groupMinX = Math.min(...candidateSelections.flatMap(
+        (candidate) => candidate.map(([x]) => x)
+    ));
+    const groupMaxX = Math.max(...candidateSelections.flatMap(
+        (candidate) => candidate.map(([x]) => x)
+    ));
+    const groupMinY = Math.min(...candidateSelections.flatMap(
+        (candidate) => candidate.map(([, y]) => y)
+    ));
+    const groupMaxY = Math.max(...candidateSelections.flatMap(
+        (candidate) => candidate.map(([, y]) => y)
+    ));
 
-    return selectedBrushes.every(([brushId, brush]) => {
-      if (brushId === triggerId) return true;
-      return isInsideExtent(
-        brush.selection.map(([x, y]) => [x + distX, y + distY])
-      );
-    });
+    let correctionX = 0;
+    let correctionY = 0;
+    if (groupMinX < minX) {
+      correctionX = minX - groupMinX;
+    } else if (groupMaxX > maxX) {
+      correctionX = maxX - groupMaxX;
+    }
+    if (groupMinY < minY) {
+      correctionY = minY - groupMinY;
+    } else if (groupMaxY > maxY) {
+      correctionY = maxY - groupMaxY;
+    }
+
+    const adjustedSelection = selection.map(([x, y]) => [
+      x + correctionX,
+      y + correctionY,
+    ]);
+
+    // Keep the current event and the rendered trigger brush in sync. The
+    // programmatic brush.move emits an event without sourceEvent, so it does
+    // not start another multi-selection movement.
+    event.selection[0][0] = adjustedSelection[0][0];
+    event.selection[0][1] = adjustedSelection[0][1];
+    event.selection[1][0] = adjustedSelection[1][0];
+    event.selection[1][1] = adjustedSelection[1][1];
+
+    return event;
   }
 
   // Move all selected brushes the same amount of the triggerBrush

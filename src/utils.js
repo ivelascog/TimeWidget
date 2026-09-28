@@ -33,6 +33,12 @@ export function compareSets(set1, set2) {
   return true;
 }
 
+export function isInsideExtent(selection, domain) {
+  const [[x0,y0],[x1,y1]] = selection;
+  const [[dx0,dy0],[dx1,dy1]] = domain
+  return (x0 >= dx0 && y0 >= dy0 && x1 <= dx1 && y1 <= dy1)
+}
+
 export function isInsideDomain(domain, scaleX, scaleY) {
   let scaleXDomain = scaleX.domain();
   let scaleYDomain = scaleY.domain();
