@@ -34,7 +34,6 @@ function brushInteraction({
   scaleY,
   fmtX,
   fmtY,
-  updateTime,
   brushShadow,
   snapX,
   snapY,
@@ -522,7 +521,7 @@ function brushInteraction({
 
   function adjustSelectedBrushes(event) {
     let {selection, sourceEvent, target} = event;
-    if (sourceEvent === undefined || !selection || !extent) return true;
+    if (sourceEvent === undefined || !selection || !extent) return event;
 
     let triggerId;
     let triggerBrush;
@@ -593,6 +592,10 @@ function brushInteraction({
     event.selection[0][1] = adjustedSelection[0][1];
     event.selection[1][0] = adjustedSelection[1][0];
     event.selection[1][1] = adjustedSelection[1][1];
+    //Recoloca el Brush en la posicion adecauda.
+    gBrushes
+      .selectAll("#brush-" + triggerId)
+      .call(triggerBrush.brush.move, adjustedSelection);
 
     return event;
   }
@@ -614,11 +617,6 @@ function brushInteraction({
 
     if (hasSnapX || hasSnapY) {
       selection = snapSelectionPixels(selection);
-    }
-
-    if (!triggerBrush.isSelected) return;
-
-    if (hasSnapX || hasSnapY) {
       gBrushes
         .selectAll("#brush-" + triggerId)
         .call(triggerBrush.brush.move, selection);
