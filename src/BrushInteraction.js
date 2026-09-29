@@ -3,6 +3,7 @@ import {throttle} from "throttle-debounce";
 import BVH from "./BVH";
 import brushTooltipEditable from "./BrushTooltipEditable.js";
 import BrushContextMenu from "./BrushContextMenu.js";
+import { isValidSnapInterval, snapCoordinate } from "./Snap.js";
 import {
   finishSelectionMeasurement,
   PERFORMANCELOG,
@@ -44,10 +45,8 @@ function brushInteraction({
   selectedBrushCallback = () => {}, // (brush) => {} Called when the selected Brush changes.
   statusCallback = () => {}, // (status) => {}
 }) {
-  const snapXInterval = Number(snapX);
-  const snapYInterval = Number(snapY);
-  const hasSnapX = Number.isFinite(snapXInterval) && snapXInterval > 0;
-  const hasSnapY = Number.isFinite(snapYInterval) && snapYInterval > 0;
+  const hasSnapX = isValidSnapInterval(snapX, scaleX.domain());
+  const hasSnapY = isValidSnapInterval(snapY, scaleY.domain());
 
   let me = {},
     brushSize,
@@ -257,35 +256,16 @@ function brushInteraction({
   function snapSelectionDomain(selection) {
     return selection.map(([xValue, yValue]) => [
       hasSnapX
-          ? snapCoordinate(xValue, snapXInterval, scaleX.domain())
+          ? snapCoordinate(xValue, snapX, scaleX.domain())
           : xValue,
       hasSnapY
-          ? snapCoordinate(yValue, snapYInterval, scaleY.domain())
+          ? snapCoordinate(yValue, snapY, scaleY.domain())
           : yValue,
     ]);
   }
 
   function snapSelectionPixels(selection) {
     return getSelectionPixels(snapSelectionDomain(getSelectionDomain(selection)));
-  }
-
-  function snapCoordinate(value, interval, domain) {
-    const numericValue = +value;
-    const origin = +domain[0];
-    const domainEnd = +domain[1];
-    const lower = Math.min(origin, domainEnd);
-    const upper = Math.max(origin, domainEnd);
-    const minIndex = Math.ceil((lower - origin) / interval);
-    const maxIndex = Math.floor((upper - origin) / interval);
-    const index = Math.max(
-        minIndex,
-        Math.min(maxIndex, Math.round((numericValue - origin) / interval))
-    );
-    const snapped = origin + index * interval;
-
-    return value instanceof Date || domain[0] instanceof Date
-        ? new Date(snapped)
-        : snapped;
   }
 
   function scheduleInteractionFrame() {

@@ -190,7 +190,7 @@ This section will show all possible options grouped by categories.
  - **referenceCurves**:  Specifies a Json object with the information of the reference lines.
  - **fmtX**: Function, how to format x points in the tooltip. Note that it must conform to the data type provided in X.
  - **fmtY**: Function, how to format x points in the tooltip. Note that it must conform to the data type provided in Y.
- - **snapX**: Optional positive interval in X domain units to which both horizontal brush edges are snapped. For time scales, use a date-fns Duration such as `{ days: 7 }` or a number of milliseconds. TimeWidget converts durations to milliseconds before configuring the brush interaction. The grid starts at the lower X-domain boundary.
+ - **snapX**: Optional positive interval in X domain units to which both horizontal brush edges are snapped. For time scales, use a single-unit date-fns Duration such as `{ months: 1 }` or `{ days: 7 }`, or a number of milliseconds. Calendar durations are applied from the lower X-domain boundary with date-fns, so months and years preserve their real calendar boundaries.
  - **snapY**: Optional positive interval in Y domain units to which both vertical brush edges are snapped. The grid starts at the lower Y-domain boundary.
  - **xLabel**: Label to show in the X axis
  - **yLabel**: Label to show in the Y axis

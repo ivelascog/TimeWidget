@@ -79,14 +79,14 @@
       <h1>Snapping con fechas en el eje X</h1>
       <p>
         El intervalo se pasa directamente a <code>snapX</code> como una duración
-        de date-fns: <code>{ days: 7 }</code>. La cuadrícula temporal comienza
-        el 4 de enero de 2026.
+        de date-fns: <code>{ months: 1 }</code>. La cuadrícula temporal comienza
+        el 1 de enero de 2023 y respeta la duración real de cada mes.
       </p>
 
       <div class="panel">
         <label>
-          Intervalo X (días)
-          <input id="snap-x-days" type="number" min="1" step="1" value="7" />
+          Intervalo X (meses)
+          <input id="snap-x-months" type="number" min="1" step="1" value="1" />
         </label>
         <label>
           Intervalo Y
@@ -100,19 +100,25 @@
         <span id="coordinates">Sin selección</span>
       </div>
 
+      <p>
+        La selección inicial usa deliberadamente el 5 de mayo y el 8 de
+        diciembre. Con un intervalo de un mes debe ajustarse al 1 de mayo y al
+        1 de diciembre.
+      </p>
+
       <div id="widget"></div>
     </main>
 
     <script src="https://d3js.org/d3.v7.js"></script>
     <script src="../dist/TimeWidget.js"></script>
     <script>
-      const domainStart = new Date(2026, 0, 4);
-      const domainEnd = new Date(2026, 2, 1);
+      const domainStart = new Date(2023, 0, 1);
+      const domainEnd = new Date(2023, 11, 31);
       const formatDate = d3.timeFormat("%Y-%m-%d");
 
       const mount = document.getElementById("widget");
       const coordinates = document.getElementById("coordinates");
-      const snapXDaysInput = document.getElementById("snap-x-days");
+      const snapXMonthsInput = document.getElementById("snap-x-months");
       const snapYInput = document.getElementById("snap-y");
       const applyButton = document.getElementById("apply");
 
@@ -157,7 +163,7 @@
       }
 
       function renderWidget() {
-        const snapX = { days: Number(snapXDaysInput.value) };
+        const snapX = { months: Number(snapXMonthsInput.value) };
         const snapY = Number(snapYInput.value);
 
         mount.replaceChildren();
@@ -187,8 +193,8 @@
               brushes: [
                 {
                   selectionDomain: [
-                    [new Date(2026, 0, 8), 87],
-                    [new Date(2026, 1, 18), 24],
+                    [new Date(2023, 4, 5), 87],
+                    [new Date(2023, 11, 8), 24],
                   ],
                 },
               ],

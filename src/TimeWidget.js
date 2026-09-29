@@ -715,11 +715,6 @@ function TimeWidget(
       .join("g")
       .attr("id", "brushes");
 
-    const snapXMilliseconds =
-      snapX !== null && typeof snapX === "object"
-        ? +add(overviewX.domain()[0], snapX) - +overviewX.domain()[0]
-        : snapX;
-
     brushes = brushInteraction({
       ts,
       element: gBrushes.node(),
@@ -731,7 +726,7 @@ function TimeWidget(
       x,
       y,
       brushShadow,
-      snapX: snapXMilliseconds,
+      snapX,
       snapY,
       fmtY,
       fmtX: fmtX,
