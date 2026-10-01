@@ -29,3 +29,28 @@ jobs:
     - run: npm ci
     - run: npm run build --if-present
     - run: npm test
+
+  e2e:
+    # Drives the built bundle in a real browser. The unit suite cannot reach
+    # this layer: every bug fixed in #63/#65 was a call-site or render bug, and
+    # the suite stayed green at 19/19 while all of them were live.
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Use Node.js 20.x
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'npm'
+    - run: npm ci
+    # The e2e suite loads dist/, so the bundle has to exist before it runs.
+    - run: npm run build
+    - run: npx playwright install --with-deps chromium
+    - run: npm run test:e2e
+    - uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 7
