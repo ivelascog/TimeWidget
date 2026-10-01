@@ -79,18 +79,20 @@
       <h1>Snapping con fechas en el eje X</h1>
       <p>
         El intervalo se pasa directamente a <code>snapX</code> como una duración
-        de date-fns: <code>{ months: 1 }</code>. La cuadrícula temporal comienza
-        el 1 de enero de 2023 y respeta la duración real de cada mes.
+        de date-fns: <code>{ months: 5 }</code>. La cuadrícula temporal comienza
+        el 1 de enero de 2023 y respeta la duración real de cada mes. Como cinco
+        meses no dividen exactamente el dominio anual, el límite superior
+        visible se corrige al 1 de abril de 2024.
       </p>
 
       <div class="panel">
         <label>
           Intervalo X (meses)
-          <input id="snap-x-months" type="number" min="1" step="1" value="1" />
+          <input id="snap-x-months" type="number" min="1" step="1" value="5" />
         </label>
         <label>
           Intervalo Y
-          <input id="snap-y" type="number" min="1" step="1" value="10" />
+          <input id="snap-y" type="number" min="1" step="1" value="15" />
         </label>
         <button id="apply" type="button">Aplicar y reiniciar</button>
       </div>
@@ -102,8 +104,8 @@
 
       <p>
         La selección inicial usa deliberadamente el 5 de mayo y el 8 de
-        diciembre. Con un intervalo de un mes debe ajustarse al 1 de mayo y al
-        1 de diciembre.
+        diciembre. Con un intervalo de cinco meses debe ajustarse al 1 de junio
+        y al 1 de noviembre.
       </p>
 
       <div id="widget"></div>

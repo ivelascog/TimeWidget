@@ -64,6 +64,20 @@ export function isValidDateSnapDuration(duration, domain) {
   return isValid(firstPoint) && firstPoint > domain[0];
 }
 
+export function expandDateDomainToSnap(domain, duration) {
+  if (!isValidDateSnapDuration(duration, domain)) return domain;
+
+  const { add, difference, amount } = parseDateSnapDuration(duration);
+  const origin = domain[0];
+  const end = domain[1];
+  const index = Math.max(1, Math.ceil(difference(end, origin) / amount));
+  const boundary = add(origin, index * amount);
+  const expandedEnd =
+    boundary < end ? add(origin, (index + 1) * amount) : boundary;
+
+  return [domain[0], expandedEnd];
+}
+
 export function snapDateCoordinate(value, duration, domain) {
   if (!isValidDateSnapDuration(duration, domain) || !isValid(value)) {
     return value;

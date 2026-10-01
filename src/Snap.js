@@ -1,8 +1,10 @@
 import {
+  expandDateDomainToSnap,
   isValidDateSnapDuration,
   snapDateCoordinate,
 } from "./snap/DateSnap.js";
 import {
+  expandNumericDomainToSnap,
   isValidNumericSnapInterval,
   snapNumericCoordinate,
 } from "./snap/NumericSnap.js";
@@ -26,4 +28,10 @@ export function snapCoordinate(value, interval, domain) {
   return isDateSnap(interval, domain)
     ? snapDateCoordinate(value, interval, domain)
     : snapNumericCoordinate(value, interval, domain);
+}
+
+export function expandDomainToSnap(domain, interval) {
+  return isDateSnap(interval, domain)
+    ? expandDateDomainToSnap(domain, interval)
+    : expandNumericDomainToSnap(domain, interval);
 }

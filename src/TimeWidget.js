@@ -17,6 +17,7 @@ import {
 import TimelineDetails from "./TimelineDetails.js";
 import TimeLineOverview from "./TimeLineOverview";
 import brushInteraction from "./BrushInteraction";
+import { expandDomainToSnap } from "./Snap.js";
 
 // Serial number for DOM ids that must be unique across the whole document
 // rather than merely within one widget (see clipId below).
@@ -481,6 +482,7 @@ function TimeWidget(
     }
 
     overviewX.range([0, width - ts.margin.right - ts.margin.left]).nice();
+    overviewX.domain(expandDomainToSnap(overviewX.domain(), snapX));
 
     if (!ts.yDomain) {
       ts.yDomain = fixAxis && _this ? _this.extent.y : d3.extent(fData, y); // Keep same axes as in the first rendering
@@ -494,6 +496,7 @@ function TimeWidget(
     // as false flat lines on the top and bottom edges. They are hidden by the
     // clip-path instead (see #65).
     overviewY.range([height - ts.margin.top - ts.margin.bottom, 0]).nice();
+    overviewY.domain(expandDomainToSnap(overviewY.domain(), snapY));
   }
 
   function init() {

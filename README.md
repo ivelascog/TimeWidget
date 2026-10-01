@@ -190,8 +190,8 @@ This section will show all possible options grouped by categories.
  - **referenceCurves**:  Specifies a Json object with the information of the reference lines.
  - **fmtX**: Function, how to format x points in the tooltip. Note that it must conform to the data type provided in X.
  - **fmtY**: Function, how to format x points in the tooltip. Note that it must conform to the data type provided in Y.
- - **snapX**: Optional positive interval in X domain units to which both horizontal brush edges are snapped. For time scales, use a single-unit date-fns Duration such as `{ months: 1 }` or `{ days: 7 }`, or a number of milliseconds. Calendar durations are applied from the lower X-domain boundary with date-fns, so months and years preserve their real calendar boundaries.
- - **snapY**: Optional positive interval in Y domain units to which both vertical brush edges are snapped. The grid starts at the lower Y-domain boundary.
+ - **snapX**: Optional positive interval in X domain units to which both horizontal brush edges are snapped. For time scales, use a single-unit date-fns Duration such as `{ months: 1 }` or `{ days: 7 }`, or a number of milliseconds. Calendar durations are applied from the lower X-domain boundary with date-fns, so months and years preserve their real calendar boundaries. The visible upper domain boundary is expanded when necessary so the domain width is an exact multiple of the interval.
+ - **snapY**: Optional positive interval in Y domain units to which both vertical brush edges are snapped. The grid starts at the lower Y-domain boundary, and the visible upper boundary is expanded to the next interval when necessary.
  - **xLabel**: Label to show in the X axis
  - **yLabel**: Label to show in the Y axis
  - **xTicks**: Allows to use custom strings as ticks on the X-axis independently of the X-scale. A vector of [xValue,Label] pairs is expected. Note that only the defined elements are displayed and xValue must belong to the domain of X.

@@ -77,17 +77,19 @@
       <p>
         Crea, mueve o redimensiona un brush. Sus extremos solamente podrán
         quedar en múltiplos de los intervalos indicados, tomando como origen el
-        límite inferior de cada dominio.
+        límite inferior de cada dominio. El dominio inicial es
+        <code>[0, 100]</code>; con el intervalo predeterminado de 15, el límite
+        superior visible se corrige a 105.
       </p>
 
       <div class="controls">
         <label>
           Intervalo X
-          <input id="snap-x" type="number" min="1" step="1" value="10" />
+          <input id="snap-x" type="number" min="1" step="1" value="15" />
         </label>
         <label>
           Intervalo Y
-          <input id="snap-y" type="number" min="1" step="1" value="10" />
+          <input id="snap-y" type="number" min="1" step="1" value="15" />
         </label>
         <button id="apply" type="button">Aplicar y reiniciar</button>
       </div>
