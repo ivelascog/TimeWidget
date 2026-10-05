@@ -273,16 +273,16 @@ function brushInteraction({
     interactionFrame = window.requestAnimationFrame(() => {
       interactionFrame = null;
 
-      // Updating all selected brushes subsumes a pending single-brush update.
-      if (pendingSelectionUpdate) {
-        pendingSelectionUpdate = false;
-        pendingBrushUpdate = null;
-        updateSelection();
-        return;
-      }
-
       const update = pendingBrushUpdate;
       pendingBrushUpdate = null;
+
+      if (pendingSelectionUpdate) {
+        pendingSelectionUpdate = false;
+        updateSelection();
+        // The group update already processes a Shift-selected trigger.
+        if (update && update.brush[1].isSelected) return;
+      }
+
       if (update) brushed(update.event, update.brush);
     });
   }
