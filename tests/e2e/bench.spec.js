@@ -51,10 +51,11 @@ test.describe("bench harness", () => {
   test("naive baselines select exactly what TimeWidget selects", async ({ page }) => {
     for (const groups of [1, 3]) {
       const r = await page.evaluate(
-        (g) => window.benchPreflight({ adapters: ["timewidget", "canvas"], lines: 1000, points: 20, groups: g }),
+        (g) => window.benchPreflight({ adapters: ["timewidget", "canvas", "svg"], lines: 1000, points: 20, groups: g }),
         groups
       );
       expect(r.canvas).toEqual(r.timewidget);
+      expect(r.svg).toEqual(r.timewidget);
       expect(r.timewidget.flat().some((c) => c > 0)).toBe(true);
     }
   });
