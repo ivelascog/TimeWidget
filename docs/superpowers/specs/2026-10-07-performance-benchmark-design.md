@@ -80,6 +80,18 @@ WebKit as primary targets (optional ecological check only); fixing
 
 FPS is always computed from frame time, never measured directly.
 
+**Amended during implementation (validation §9b).** A Chrome trace showed the
+in-page clock is only right when rendering back-pressures the main thread (GPU
+canvas: TimeWidget, the canvas baseline, Vega-Lite — every measured frame was
+presented). Naive SVG rasterises off the main thread: 120 driver frames at 5k
+series produced 27 swaps, so its in-page frame time (6.3 ms) was ~4× too
+optimistic (~25 ms presented). Every run therefore records a small trace (`viz`
++ `blink.user_timing`), and when presented/produced frames < 0.95 the headline
+FrameMs is the interval between presented frames. Above 0.95 the in-page time
+stands, because the display also re-swaps without new content when frames take
+~1–3 ms (ratios up to 1.35 observed). Both are kept in the CSV (`MainThreadMs`,
+`Presented ratio`).
+
 **Frame time definition** (identical for every implementation, and identical to
 the existing TimeWidget monitor so numbers stay comparable): `performance.now()`
 at the next `requestAnimationFrame` minus `performance.now()` immediately before

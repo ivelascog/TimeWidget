@@ -31,6 +31,16 @@ Serve the repo root: the examples load `../dist/TimeWidget.js`, and the e2e
 fixture also loads `../../node_modules/d3/dist/d3.js`. Only the root contains
 both. `npm run dev` is `rollup -c -w` — a watch build, **not** a server.
 
+### Performance benchmark
+
+`npm run bench` (see `bench/README.md`) measures TimeWidget against naive
+Canvas, naive SVG and Vega-Lite baselines for the paper. It is **headed** and
+takes 2–3 h; never run it in CI. Default Playwright headless uses a
+software-rasterised canvas, so its frame times are meaningless. Frame time is
+measured with vsync off; when Chrome's trace shows dropped frames (naive SVG
+rasterises off the main thread), the presented-frame interval is the headline
+instead. `tests/e2e/bench.spec.js` checks the adapters' behaviour, never timing.
+
 **`npm run build` before e2e.** The e2e suite drives `dist/`, not `src/`, so a
 source edit is invisible to it until you rebuild. CI does this explicitly.
 
