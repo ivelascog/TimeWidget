@@ -1,3 +1,4 @@
+/* global d3 */ // loaded by bench/page.html
 // Naive Canvas 2D baseline: what a competent developer writes first. Every
 // frame tests every series against every brush (no spatial index) and
 // redraws every series from scratch (no cached paths).

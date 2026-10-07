@@ -1,3 +1,4 @@
+/* global d3 */ // loaded by bench/page.html
 // Naive d3 SVG baseline: one <path> per series, the way a d3 tutorial builds
 // it. Every frame tests every series against every brush and restyles every
 // path. See canvas.js for the adapter contract.

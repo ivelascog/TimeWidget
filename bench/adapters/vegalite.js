@@ -1,3 +1,4 @@
+/* global vegaEmbed */ // loaded by bench/page.html
 // Vega-Lite baseline, written the way a general-purpose grammar is used for
 // this task: a grey line per series with one interval param per brush group,
 // plus one highlight layer per group showing the series with any point inside
