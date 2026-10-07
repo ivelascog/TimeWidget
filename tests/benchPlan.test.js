@@ -48,6 +48,14 @@ describe("shouldSkip", () => {
   test("a truncated run counts as over the limit", () => {
     expect(shouldSkip(big, done(20, true))).toBe(true);
   });
+  // Review finding: a crash wrote no record, so --resume retried it forever.
+  test("a crashed run counts as over the limit", () => {
+    expect(shouldSkip(big, [{ type: "crash", cell: small, rep: 0, error: "OOM" }])).toBe(true);
+    expect(shouldSkip(small, [{ type: "crash", cell: small, rep: 0, error: "OOM" }])).toBe(true);
+  });
+  test("a truncated run counts as over the limit (again)", () => {
+    expect(shouldSkip(big, done(20, true))).toBe(true);
+  });
   test("smaller sizes are never skipped because of a bigger one", () => {
     expect(shouldSkip(small, [{ cell: big, rep: 0, frameMs: { p95: 999 }, truncated: false }])).toBe(false);
   });

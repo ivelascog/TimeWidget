@@ -30,7 +30,19 @@ export async function runCell({
   const extent = dataExtent(data);
   const adapter = await mount(name);
 
+  // A focus steal mid-run throttles rAF while start and end checks still pass.
+  let focusLost = false;
+  const lose = () => {
+    focusLost = true;
+  };
+  const onVisibility = () => {
+    if (document.visibilityState !== "visible") focusLost = true;
+  };
+  window.addEventListener("blur", lose);
+  document.addEventListener("visibilitychange", onVisibility);
+
   // Load time: data handed over -> first frame presented with the brushes on.
+  // The time budget starts here too, so a huge load is bounded as well.
   const t0 = performance.now();
   await adapter.load(data, extent);
   await adapter.setGroups(groupDomains(extent, groups));
@@ -42,8 +54,11 @@ export async function runCell({
   const step = trajectory(extent, total);
   const frameTimes = [];
   let truncated = false;
-  const budgetStart = performance.now();
   for (let i = 0; i < total; i++) {
+    if (performance.now() - t0 > budgetMs) {
+      truncated = true;
+      break;
+    }
     if (i === warmupFrames) {
       if (adapter.resetBreakdown) adapter.resetBreakdown();
       // run.mjs reads these marks from a Chrome trace to count the frames
@@ -54,13 +69,11 @@ export async function runCell({
     await adapter.move(0, step(i));
     await nextFrame();
     if (i >= warmupFrames) frameTimes.push(performance.now() - start);
-    if (performance.now() - budgetStart > budgetMs) {
-      truncated = true;
-      break;
-    }
   }
 
   performance.mark("bench-measure-end");
+  window.removeEventListener("blur", lose);
+  document.removeEventListener("visibilitychange", onVisibility);
 
   const b = adapter.breakdown();
   const result = {
@@ -75,6 +88,7 @@ export async function runCell({
     frames: frameTimes,
     visible: document.visibilityState === "visible",
     focused: document.hasFocus(),
+    focusLost,
   };
   adapter.destroy();
   return result;

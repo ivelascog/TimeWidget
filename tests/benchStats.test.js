@@ -8,6 +8,7 @@ import {
   toSheetRow,
   aggregateCell,
   headlineMs,
+  scalingSummary,
 } from "../bench/stats.mjs";
 
 test("percentile interpolates like PerformanceMonitor", () => {
@@ -97,7 +98,7 @@ test("presented frame time is the headline when the trace recorded it", () => {
   const cell = { adapter: "svg", lines: 5000, points: 100, groups: 1 };
   const presented = { samples: 27, mean: 28, p50: 27, p95: 40, p99: 45 };
   const r = {
-    cell, frameMs: frame, presentedMs: presented, presentedRatio: 0.225,
+    cell, frameMs: frame, presentedMs: presented, presentedRatio: 0.225, presentedFrames: 27,
     collisionMs: null, renderMs: null, totalCpuMs: null, loadMs: 1, truncated: false,
   };
   const a = aggregateCell([r, r, r]);
@@ -108,6 +109,8 @@ test("presented frame time is the headline when the trace recorded it", () => {
   expect(row[SHEET_COLUMNS.indexOf("FrameMs p50")]).toBe(27);
   expect(row[SHEET_COLUMNS.indexOf("MainThreadMs p50")]).toBe(10);
   expect(row[SHEET_COLUMNS.indexOf("Presented ratio")]).toBeCloseTo(0.225);
+  // How many presented intervals the headline percentiles rest on.
+  expect(row[SHEET_COLUMNS.indexOf("Presented frames")]).toBe(27);
 });
 
 test("extra swaps without new content do not shorten the headline", () => {
@@ -128,4 +131,31 @@ test("aggregateCell leaves the breakdown empty for baselines", () => {
   const a = aggregateCell([r, r]);
   expect(a.collisionMs).toBeNull();
   expect(a.truncated).toBe(true);
+});
+
+describe("scalingSummary", () => {
+  const cell = (lines, p50, p95, extra = {}) => ({
+    adapter: "svg", lines, points: 20, groups: 1,
+    frameMs: { samples: 300, mean: p50, p50, p95, p99: p95 }, truncated: false, ...extra,
+  });
+
+  test("fits a line and finds threshold crossings", () => {
+    const [s] = scalingSummary([cell(1000, 1, 2), cell(10000, 10, 12), cell(20000, 20, 24)]);
+    expect(s.series).toBe("svg|20|1");
+    expect(s.r2).toBeCloseTo(1);
+    expect(s.n30).toEqual({ n: 20000, censored: true });
+    expect(s.n60.censored).toBe(false);
+  });
+
+  // Review finding: a cell with no measured frames (budget spent in warm-up)
+  // had null stats; null > 100 is false, so it read as "never crossed".
+  test("a cell with no frames or a truncated cell counts as over every threshold", () => {
+    const empty = cell(50000, null, null);
+    const [s] = scalingSummary([cell(1000, 1, 2), cell(10000, 10, 12), cell(20000, 20, 24), empty]);
+    // Unknown cost at 50k: the honest answer is the last size that passed.
+    expect(s.n100).toEqual({ n: 20000, censored: false });
+    expect(s.r2).toBeCloseTo(1); // and it is left out of the fit
+    const [t] = scalingSummary([cell(1000, 1, 2), cell(10000, 10, 12), cell(20000, 20, 24), cell(50000, 30, 40, { truncated: true })]);
+    expect(t.n100.censored).toBe(false);
+  });
 });

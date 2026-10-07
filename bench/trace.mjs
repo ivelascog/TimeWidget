@@ -7,6 +7,8 @@
 // SVG is rasterised off the main thread: in validation, 120 driver frames at
 // 5k series produced only 27 swaps, so its in-page frame time was ~4x too
 // optimistic. Display::DrawAndSwap (viz, GPU process) is one per presented frame.
+import { summarize } from "./stats.mjs";
+
 const SWAP = "Display::DrawAndSwap";
 
 export function presentedFrames(events, startMark = "bench-measure-start", endMark = "bench-measure-end") {
@@ -24,4 +26,17 @@ export function presentedFrames(events, startMark = "bench-measure-start", endMa
     previous = ts;
   }
   return { count: swaps.length, intervalsMs, windowMs: (end.ts - start.ts) / 1000 };
+}
+
+// The run's presented-frame fields, or {error} when the trace cannot vouch for
+// the run. A missing trace or zero swaps must not silently fall back to the
+// in-page time: that is exactly the number that was ~4x optimistic for SVG.
+export function presentedResult(presented, measuredFrames) {
+  if (!presented) return { error: "trace has no measurement marks" };
+  if (!presented.count) return { error: "trace recorded no swaps (Display::DrawAndSwap)" };
+  return {
+    presentedMs: summarize(presented.intervalsMs),
+    presentedFrames: presented.count,
+    presentedRatio: measuredFrames ? presented.count / measuredFrames : null,
+  };
 }

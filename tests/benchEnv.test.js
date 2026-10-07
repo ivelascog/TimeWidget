@@ -1,4 +1,6 @@
 import { checkGate } from "../bench/env.mjs";
+import { checkPreflight } from "../bench/env.mjs";
+import { presentedResult } from "../bench/trace.mjs";
 import { startServer } from "../bench/server.mjs";
 import http from "node:http";
 import path from "node:path";
@@ -76,5 +78,43 @@ describe("startServer", () => {
   test("does not list directories or escape the root", async () => {
     expect((await get("/bench/")).statusCode).toBe(404);
     expect((await get("/../../etc/passwd")).statusCode).toBe(403);
+  });
+});
+
+describe("checkPreflight", () => {
+  const tw = [[10, 5], [20, 0], [30, 7]];
+  test("naive baselines must match TimeWidget exactly", () => {
+    expect(checkPreflight({ timewidget: tw, canvas: tw, svg: tw }).ok).toBe(true);
+    const bad = checkPreflight({ timewidget: tw, canvas: tw, svg: [[10, 5], [19, 0], [30, 7]] });
+    expect(bad.ok).toBe(false);
+    expect(bad.errors[0]).toMatch(/svg/);
+  });
+  // Review finding: Vega-Lite counts were written but never checked.
+  test("Vega-Lite selecting nothing aborts", () => {
+    const r = checkPreflight({ timewidget: tw, vegalite: [[0, 0], [0, 0], [0, 0]] });
+    expect(r.ok).toBe(false);
+    expect(r.errors[0]).toMatch(/vegalite/);
+  });
+  test("Vega-Lite agreement below 0.9 aborts, otherwise it is reported", () => {
+    expect(checkPreflight({ timewidget: tw, vegalite: [[1, 1], [2, 0], [3, 1]] }).ok).toBe(false);
+    const ok = checkPreflight({ timewidget: tw, vegalite: [[10, 5], [19, 0], [30, 7]] });
+    expect(ok.ok).toBe(true);
+    expect(ok.vegaliteAgreement).toBeCloseTo(1 - 1 / 72);
+  });
+});
+
+describe("presentedResult", () => {
+  // Review finding: a trace without swap events (renamed event, failed trace)
+  // silently fell back to the in-page time, the ~4x optimistic SVG number.
+  test("no trace or no swaps is an error, not a fallback", () => {
+    expect(presentedResult(null, 300).error).toMatch(/trace/);
+    expect(presentedResult({ count: 0, intervalsMs: [], windowMs: 1000 }, 300).error).toMatch(/swap/);
+  });
+  test("summarises presented intervals and the ratio", () => {
+    const r = presentedResult({ count: 4, intervalsMs: [10, 10, 20, 20], windowMs: 60 }, 8);
+    expect(r.error).toBeUndefined();
+    expect(r.presentedFrames).toBe(4);
+    expect(r.presentedRatio).toBe(0.5);
+    expect(r.presentedMs.p50).toBe(15);
   });
 });

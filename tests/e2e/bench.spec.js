@@ -86,4 +86,23 @@ test.describe("bench harness", () => {
     expect(r.truncated).toBe(true);
     expect(r.measuredFrames).toBeLessThan(300);
   });
+
+  // Review finding: focus checked only at start and end; a focus steal in the
+  // middle of a run passed both checks.
+  test("a blur during the run is recorded", async ({ page }) => {
+    const r = await page.evaluate(() => {
+      setTimeout(() => window.dispatchEvent(new Event("blur")), 50);
+      return window.benchCell({ adapter: "timewidget", lines: 300, points: 20, groups: 1, frames: 200, warmupFrames: 0 });
+    });
+    expect(r.focusLost).toBe(true);
+  });
+
+  // Review finding: the budget started after load, so a huge load had no bound.
+  test("the budget includes load time", async ({ page }) => {
+    const r = await page.evaluate(() =>
+      window.benchCell({ adapter: "timewidget", lines: 300, points: 20, groups: 1, frames: 300, warmupFrames: 0, budgetMs: 0 })
+    );
+    expect(r.truncated).toBe(true);
+    expect(r.measuredFrames).toBe(0);
+  });
 });

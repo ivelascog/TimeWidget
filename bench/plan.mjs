@@ -40,15 +40,16 @@ export function orderRuns(cells, reps, seed) {
   return runs;
 }
 
-// Skip a size once any run of the same series at a size <= it blew the limit
-// or hit the time budget: larger sizes only get slower.
+// Skip a size once any run of the same series at a size <= it blew the limit,
+// hit the time budget or crashed: larger sizes only get slower. Crashes count
+// at their own size too, or --resume would retry them forever.
 export function shouldSkip(cell, completed, limitMs = 250) {
   const key = seriesKey(cell);
   return completed.some(
     (r) =>
       seriesKey(r.cell) === key &&
       r.cell.lines <= cell.lines &&
-      (r.truncated || headlineMs(r).p95 > limitMs)
+      (r.type === "crash" || r.truncated || headlineMs(r).p95 > limitMs)
   );
 }
 

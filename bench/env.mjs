@@ -24,6 +24,37 @@ export function checkGate(state, { allowSoftwareRaster = false } = {}) {
   return { ok: reasons.length === 0, reasons };
 }
 
+// Pure: every implementation must answer the same query. The naive baselines
+// use TimeWidget's semantics and must match it exactly; Vega-Lite tests points
+// rather than segments, so it must agree at least 90% and select something
+// (all zeros means the brush never reached Vega's store).
+export const VEGALITE_MIN_AGREEMENT = 0.9;
+
+export function checkPreflight(counts) {
+  const errors = [];
+  const ref = counts.timewidget;
+  let vegaliteAgreement = null;
+  if (ref) {
+    for (const name of ["canvas", "svg"]) {
+      if (counts[name] && JSON.stringify(counts[name]) !== JSON.stringify(ref)) {
+        errors.push(`${name} selects differently from TimeWidget`);
+      }
+    }
+    if (counts.vegalite) {
+      const tw = ref.flat();
+      const vl = counts.vegalite.flat();
+      const total = tw.reduce((a, b) => a + b, 0);
+      const diff = tw.reduce((s, c, i) => s + Math.abs(c - vl[i]), 0);
+      vegaliteAgreement = 1 - diff / Math.max(1, total);
+      if (!vl.some((c) => c > 0)) errors.push("vegalite selected nothing: the brush did not reach Vega");
+      else if (vegaliteAgreement < VEGALITE_MIN_AGREEMENT) {
+        errors.push(`vegalite agrees with TimeWidget on only ${(vegaliteAgreement * 100).toFixed(1)}% of selections`);
+      }
+    }
+  }
+  return { ok: errors.length === 0, errors, vegaliteAgreement };
+}
+
 // The page cannot detect the display refresh rate with vsync off and a forced
 // viewport, so ask the OS. Best effort: null when the platform tool is missing.
 export async function osRefreshRates() {

@@ -117,6 +117,7 @@ export const SHEET_COLUMNS = [
   "Truncated",
   ...metricCols("MainThreadMs"),
   "Presented ratio",
+  "Presented frames",
 ];
 
 const fps = (ms) => (ms && ms > 0 ? 1000 / ms : "");
@@ -146,6 +147,7 @@ export function toSheetRow(c) {
     c.truncated,
     ...cols(c.mainThreadMs),
     c.presentedRatio === null || c.presentedRatio === undefined ? "" : c.presentedRatio,
+    c.presentedFrames === null || c.presentedFrames === undefined ? "" : c.presentedFrames,
   ];
 }
 
@@ -174,10 +176,41 @@ export function aggregateCell(runs) {
     frameP95CI: bootstrapCI(runs.map((r) => headlineMs(r).p95)),
     mainThreadMs: medianSummary(runs, (r) => r.frameMs),
     presentedRatio: medianOf(runs, (r) => r.presentedRatio),
+    presentedFrames: medianOf(runs, (r) => r.presentedFrames),
     collisionMs: medianSummary(runs, (r) => r.collisionMs),
     renderMs: medianSummary(runs, (r) => r.renderMs),
     totalCpuMs: medianSummary(runs, (r) => r.totalCpuMs),
     loadMs: medianOf(runs, (r) => r.loadMs),
     truncated: runs.some((r) => r.truncated),
   };
+}
+
+// Per series (adapter, points, groups): threshold crossings on p95 and a linear
+// fit of p50 against total points. A cell that was truncated or has no frames
+// has an unknown, too-high cost: it counts as over every threshold (so the
+// crossing is the last size that passed) and is left out of the fit.
+export function scalingSummary(cells) {
+  const series = new Map();
+  for (const c of cells) {
+    const k = `${c.adapter}|${c.points}|${c.groups}`;
+    if (!series.has(k)) series.set(k, []);
+    series.get(k).push(c);
+  }
+  return [...series.entries()].map(([k, cs]) => {
+    const known = (c) => !c.truncated && c.frameMs && c.frameMs.p95 !== null && c.frameMs.p50 !== null;
+    const pts = cs.map((c) => ({ n: c.lines, ms: known(c) ? c.frameMs.p95 : Infinity }));
+    const fitCells = cs.filter(known);
+    const fit =
+      fitCells.length >= 3
+        ? linearFit(fitCells.map((c) => c.lines * c.points), fitCells.map((c) => c.frameMs.p50))
+        : null;
+    return {
+      series: k,
+      n60: thresholdCrossing(pts, 1000 / 60),
+      n30: thresholdCrossing(pts, 1000 / 30),
+      n100: thresholdCrossing(pts, 100),
+      msPer100kPoints: fit ? fit.slope * 1e5 : null,
+      r2: fit ? fit.r2 : null,
+    };
+  });
 }

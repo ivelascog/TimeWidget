@@ -9,17 +9,15 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startServer } from "./server.mjs";
-import { collectEnvironment, gpuStatus, checkGate } from "./env.mjs";
+import { collectEnvironment, gpuStatus, checkGate, checkPreflight } from "./env.mjs";
 import { buildCells, orderRuns, shouldSkip, pendingRuns, seriesKey, cellKey } from "./plan.mjs";
-import { presentedFrames } from "./trace.mjs";
+import { presentedFrames, presentedResult } from "./trace.mjs";
 import {
-  summarize,
   headlineMs,
   aggregateCell,
   SHEET_COLUMNS,
   toSheetRow,
-  thresholdCrossing,
-  linearFit,
+  scalingSummary,
 } from "./stats.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -129,13 +127,11 @@ async function setup(pageUrl) {
         points: 20,
         groups,
       });
-      write({ type: "preflight", groups, counts });
-      if (counts.timewidget) {
-        for (const name of ["canvas", "svg"]) {
-          if (counts[name] && JSON.stringify(counts[name]) !== JSON.stringify(counts.timewidget)) {
-            throw new Error(`Preflight: ${name} selects differently from TimeWidget (groups=${groups})`);
-          }
-        }
+      const check = checkPreflight(counts);
+      write({ type: "preflight", groups, counts, vegaliteAgreement: check.vegaliteAgreement, errors: check.errors });
+      if (!check.ok) throw new Error(`Preflight (groups=${groups}): ${check.errors.join("; ")}`);
+      if (check.vegaliteAgreement !== null) {
+        console.log(`preflight groups=${groups}: Vega-Lite agrees on ${(check.vegaliteAgreement * 100).toFixed(1)}%`);
       }
     }
     // Discarded warm-up cell: first-run disk and GPU shader caches.
@@ -152,6 +148,30 @@ async function setup(pageUrl) {
   }
 }
 
+// No single run may hang the session: the in-page budget bounds load and
+// frames, this bounds everything else (e.g. a renderer that stops answering).
+const RUN_TIMEOUT_MS = 5 * 60 * 1000;
+
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`run exceeded ${ms / 1000} s`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+// A crash is recorded, not thrown: the session continues, and shouldSkip
+// keeps --resume from retrying the same cell forever.
+async function runOneSafely(pageUrl, cell, rep) {
+  try {
+    return await withTimeout(runOne(pageUrl, cell, rep), RUN_TIMEOUT_MS);
+  } catch (e) {
+    return { type: "crash", cell, rep, error: String(e && e.message ? e.message : e) };
+  }
+}
+
 async function runOne(pageUrl, cell, rep) {
   const { browser, page } = await launch();
   try {
@@ -162,13 +182,13 @@ async function runOne(pageUrl, cell, rep) {
     await browser.startTracing(page, { categories: ["viz", "blink.user_timing"] });
     const result = await page.evaluate((o) => window.benchCell(o), Object.assign({}, cell, { frames, warmupFrames }));
     const presented = presentedFrames(JSON.parse((await browser.stopTracing()).toString()).traceEvents);
-    if (presented) {
-      result.presentedMs = summarize(presented.intervalsMs);
-      result.presentedFrames = presented.count;
-      result.presentedRatio = result.measuredFrames ? presented.count / result.measuredFrames : null;
-    }
-    if (!result.visible || !result.focused) {
+    if (!result.visible || !result.focused || result.focusLost) {
       return { type: "reject", cell, rep, reasons: ["lost visibility or focus during the run"] };
+    }
+    if (result.measuredFrames > 0) {
+      const p = presentedResult(presented, result.measuredFrames);
+      if (p.error) return { type: "reject", cell, rep, reasons: [p.error] };
+      Object.assign(result, p);
     }
     return Object.assign({ type: "run", cell, rep }, result);
   } finally {
@@ -196,25 +216,7 @@ function writeSummary() {
   const csv = [SHEET_COLUMNS, ...cells.map(toSheetRow)].map((row) => row.map(csvCell).join(",")).join("\n");
   fs.writeFileSync(base + ".csv", csv + "\n");
 
-  const series = new Map();
-  for (const c of cells) {
-    const k = seriesKey(c);
-    if (!series.has(k)) series.set(k, []);
-    series.get(k).push(c);
-  }
-  const scaling = [...series.entries()].map(([k, cs]) => {
-    const pts = cs.map((c) => ({ n: c.lines, ms: c.frameMs.p95 }));
-    // A slope needs several sizes; the points sweep has one size per series.
-    const fit = cs.length >= 3 ? linearFit(cs.map((c) => c.lines * c.points), cs.map((c) => c.frameMs.p50)) : null;
-    return {
-      series: k,
-      n60: thresholdCrossing(pts, 1000 / 60),
-      n30: thresholdCrossing(pts, 1000 / 30),
-      n100: thresholdCrossing(pts, 100),
-      msPer100kPoints: fit ? fit.slope * 1e5 : null,
-      r2: fit ? fit.r2 : null,
-    };
-  });
+  const scaling = scalingSummary(cells);
   fs.writeFileSync(base + ".summary.json", JSON.stringify({ cells, scaling }, null, 2));
   console.log(`wrote ${base}.csv and ${base}.summary.json`);
 }
@@ -233,14 +235,18 @@ async function main() {
     let i = 0;
     for (const { cell, rep } of todo) {
       i++;
-      if (shouldSkip(cell, readRecords().filter((r) => r.type === "run"))) {
+      if (shouldSkip(cell, readRecords().filter((r) => r.type === "run" || r.type === "crash"))) {
         write({ type: "skip", cell, rep });
         continue;
       }
-      const record = await runOne(pageUrl, cell, rep);
+      const record = await runOneSafely(pageUrl, cell, rep);
       write(record);
       if (record.type === "reject") {
         console.warn(`[${i}/${todo.length}] REJECTED ${cellKey(cell)} rep ${rep}: ${record.reasons.join("; ")}`);
+      } else if (record.type === "crash") {
+        console.warn(`[${i}/${todo.length}] CRASHED ${cellKey(cell)} rep ${rep}: ${record.error}`);
+      } else if (record.measuredFrames === 0) {
+        console.log(`[${i}/${todo.length}] ${cellKey(cell)} rep ${rep}: no frames within the budget (truncated)`);
       } else {
         const f = headlineMs(record);
         const ratio = record.presentedRatio === undefined || record.presentedRatio === null ? "?" : record.presentedRatio.toFixed(2);
