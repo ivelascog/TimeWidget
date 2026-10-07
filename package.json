@@ -24,6 +24,7 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run build && npm run test:e2e",
+    "bench": "npm run build && node bench/run.mjs",
     "prepublish": "npm run build"
   },
   "keywords": [],
