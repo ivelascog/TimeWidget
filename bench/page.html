@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>TimeWidget benchmark harness</title>
+    <style>
+      body { margin: 0; font: 12px system-ui, sans-serif; }
+      #stage { width: 800px; height: 600px; }
+    </style>
+  </head>
+  <body>
+    <!-- Driven by bench/run.mjs (and tests/e2e/bench.spec.js). Every library
+         comes from node_modules, never a CDN, so versions match package-lock. -->
+    <div id="stage"></div>
+    <script src="../node_modules/d3/dist/d3.js"></script>
+    <script src="../node_modules/vega/build/vega.min.js"></script>
+    <script src="../node_modules/vega-lite/build/vega-lite.min.js"></script>
+    <script src="../node_modules/vega-embed/build/vega-embed.min.js"></script>
+    <script src="../dist/TimeWidget.js"></script>
+    <script type="module">
+      import { runCell, preflight } from "./driver.js";
+      window.benchCell = runCell;
+      window.benchPreflight = preflight;
+    </script>
+  </body>
+</html>

@@ -29,3 +29,30 @@ test.describe("benchmark API", () => {
     expect(result.after[0]).toBeLessThan(200);
   });
 });
+
+test.describe("bench harness", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/bench/page.html");
+    await page.waitForFunction(() => typeof window.benchCell === "function");
+  });
+
+  test("timewidget cell returns finite frame stats and a breakdown", async ({ page }) => {
+    const r = await page.evaluate(() =>
+      window.benchCell({ adapter: "timewidget", lines: 300, points: 20, groups: 3, frames: 10, warmupFrames: 2 })
+    );
+    expect(r.measuredFrames).toBe(10);
+    expect(Number.isFinite(r.frameMs.p50)).toBe(true);
+    expect(r.totalCpuMs.samples).toBeGreaterThan(0);
+    expect(r.loadMs).toBeGreaterThan(0);
+  });
+
+  test("budget truncates a run", async ({ page }) => {
+    const r = await page.evaluate(() =>
+      window.benchCell({
+        adapter: "timewidget", lines: 300, points: 20, groups: 1, frames: 300, warmupFrames: 0, budgetMs: 1,
+      })
+    );
+    expect(r.truncated).toBe(true);
+    expect(r.measuredFrames).toBeLessThan(300);
+  });
+});
