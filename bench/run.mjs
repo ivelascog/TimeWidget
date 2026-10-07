@@ -11,7 +11,16 @@ import { fileURLToPath } from "node:url";
 import { startServer } from "./server.mjs";
 import { collectEnvironment, gpuStatus, checkGate } from "./env.mjs";
 import { buildCells, orderRuns, shouldSkip, pendingRuns, seriesKey, cellKey } from "./plan.mjs";
-import { aggregateCell, SHEET_COLUMNS, toSheetRow, thresholdCrossing, linearFit } from "./stats.mjs";
+import { presentedFrames } from "./trace.mjs";
+import {
+  summarize,
+  headlineMs,
+  aggregateCell,
+  SHEET_COLUMNS,
+  toSheetRow,
+  thresholdCrossing,
+  linearFit,
+} from "./stats.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { values: opt } = parseArgs({
@@ -20,6 +29,7 @@ const { values: opt } = parseArgs({
     reps: { type: "string" },
     adapters: { type: "string" },
     lines: { type: "string" },
+    groups: { type: "string" },
     frames: { type: "string", default: "300" },
     warmup: { type: "string", default: "60" },
     seed: { type: "string", default: "1" },
@@ -52,6 +62,7 @@ const config = opt.quick
     };
 if (opt.adapters) config.adapters = list(opt.adapters, String);
 if (opt.lines) config.lines = list(opt.lines);
+if (opt.groups) config.groups = list(opt.groups);
 if (opt.reps) config.reps = Number(opt.reps);
 const frames = Number(opt.frames);
 const warmupFrames = Number(opt.warmup);
@@ -147,7 +158,15 @@ async function runOne(pageUrl, cell, rep) {
     await openHarness(page, pageUrl);
     const g = await gate(browser, page);
     if (!g.ok) return { type: "reject", cell, rep, reasons: g.reasons };
+    // Only the swap and user-timing categories: small, and cheap to record.
+    await browser.startTracing(page, { categories: ["viz", "blink.user_timing"] });
     const result = await page.evaluate((o) => window.benchCell(o), Object.assign({}, cell, { frames, warmupFrames }));
+    const presented = presentedFrames(JSON.parse((await browser.stopTracing()).toString()).traceEvents);
+    if (presented) {
+      result.presentedMs = summarize(presented.intervalsMs);
+      result.presentedFrames = presented.count;
+      result.presentedRatio = result.measuredFrames ? presented.count / result.measuredFrames : null;
+    }
     if (!result.visible || !result.focused) {
       return { type: "reject", cell, rep, reasons: ["lost visibility or focus during the run"] };
     }
@@ -223,10 +242,11 @@ async function main() {
       if (record.type === "reject") {
         console.warn(`[${i}/${todo.length}] REJECTED ${cellKey(cell)} rep ${rep}: ${record.reasons.join("; ")}`);
       } else {
-        const f = record.frameMs;
+        const f = headlineMs(record);
+        const ratio = record.presentedRatio === undefined || record.presentedRatio === null ? "?" : record.presentedRatio.toFixed(2);
         console.log(
-          `[${i}/${todo.length}] ${cellKey(cell)} rep ${rep}: p50 ${f.p50.toFixed(2)} ms, p95 ${f.p95.toFixed(2)} ms` +
-            (record.truncated ? " (truncated)" : "")
+          `[${i}/${todo.length}] ${cellKey(cell)} rep ${rep}: p50 ${f.p50.toFixed(2)} ms, p95 ${f.p95.toFixed(2)} ms,` +
+            ` presented ${ratio}` + (record.truncated ? " (truncated)" : "")
         );
       }
     }

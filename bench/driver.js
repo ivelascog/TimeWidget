@@ -44,7 +44,12 @@ export async function runCell({
   let truncated = false;
   const budgetStart = performance.now();
   for (let i = 0; i < total; i++) {
-    if (i === warmupFrames && adapter.resetBreakdown) adapter.resetBreakdown();
+    if (i === warmupFrames) {
+      if (adapter.resetBreakdown) adapter.resetBreakdown();
+      // run.mjs reads these marks from a Chrome trace to count the frames
+      // that actually reached the screen inside the measured window.
+      performance.mark("bench-measure-start");
+    }
     const start = performance.now();
     await adapter.move(0, step(i));
     await nextFrame();
@@ -54,6 +59,8 @@ export async function runCell({
       break;
     }
   }
+
+  performance.mark("bench-measure-end");
 
   const b = adapter.breakdown();
   const result = {

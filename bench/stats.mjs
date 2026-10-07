@@ -76,6 +76,20 @@ export function linearFit(xs, ys) {
   return { slope, intercept: my - slope * mx, r2: syy === 0 ? 1 : (sxy * sxy) / (sxx * syy) };
 }
 
+// The headline frame time of a run. When frames were dropped (fewer swaps
+// than frames produced), the interval between frames that reached the screen;
+// otherwise the in-page clock. See trace.mjs for why they differ (SVG drops
+// frames without blocking the main thread). Swaps can also outnumber frames
+// (the display re-swaps without new content when frames take ~1-3 ms); those
+// extra swaps carry nothing new, so they must not shorten the headline.
+export const DROPPED_FRAMES_RATIO = 0.95;
+
+export function headlineMs(run) {
+  const dropped =
+    run.presentedMs && run.presentedMs.samples && run.presentedRatio !== null && run.presentedRatio < DROPPED_FRAMES_RATIO;
+  return dropped ? run.presentedMs : run.frameMs;
+}
+
 const STATS = ["mean", "p50", "p95", "p99"];
 const metricCols = (name) => STATS.map((s) => `${name} ${s}`);
 
@@ -101,6 +115,8 @@ export const SHEET_COLUMNS = [
   "FrameMs p95 CI high",
   "LoadMs",
   "Truncated",
+  ...metricCols("MainThreadMs"),
+  "Presented ratio",
 ];
 
 const fps = (ms) => (ms && ms > 0 ? 1000 / ms : "");
@@ -128,6 +144,8 @@ export function toSheetRow(c) {
     c.frameP95CI[1],
     c.loadMs,
     c.truncated,
+    ...cols(c.mainThreadMs),
+    c.presentedRatio === null || c.presentedRatio === undefined ? "" : c.presentedRatio,
   ];
 }
 
@@ -136,12 +154,13 @@ const medianOf = (runs, get) => {
   return v.length ? median(v) : null;
 };
 
-const medianSummary = (runs, key) =>
-  runs.every((r) => r[key])
-    ? Object.fromEntries(["samples", ...STATS].map((s) => [s, medianOf(runs, (r) => r[key][s])]))
+const medianSummary = (runs, get) =>
+  runs.every((r) => get(r))
+    ? Object.fromEntries(["samples", ...STATS].map((s) => [s, medianOf(runs, (r) => get(r)[s])]))
     : null;
 
-// runs: run records of one cell (driver.js runCell results plus {cell}).
+// runs: run records of one cell (driver.js runCell results plus {cell} and,
+// from run.mjs, presentedMs/presentedRatio).
 export function aggregateCell(runs) {
   const { adapter, lines, points, groups } = runs[0].cell;
   return {
@@ -150,12 +169,14 @@ export function aggregateCell(runs) {
     points,
     groups,
     runs: runs.length,
-    frameMs: medianSummary(runs, "frameMs"),
-    frameP50CI: bootstrapCI(runs.map((r) => r.frameMs.p50)),
-    frameP95CI: bootstrapCI(runs.map((r) => r.frameMs.p95)),
-    collisionMs: medianSummary(runs, "collisionMs"),
-    renderMs: medianSummary(runs, "renderMs"),
-    totalCpuMs: medianSummary(runs, "totalCpuMs"),
+    frameMs: medianSummary(runs, headlineMs),
+    frameP50CI: bootstrapCI(runs.map((r) => headlineMs(r).p50)),
+    frameP95CI: bootstrapCI(runs.map((r) => headlineMs(r).p95)),
+    mainThreadMs: medianSummary(runs, (r) => r.frameMs),
+    presentedRatio: medianOf(runs, (r) => r.presentedRatio),
+    collisionMs: medianSummary(runs, (r) => r.collisionMs),
+    renderMs: medianSummary(runs, (r) => r.renderMs),
+    totalCpuMs: medianSummary(runs, (r) => r.totalCpuMs),
     loadMs: medianOf(runs, (r) => r.loadMs),
     truncated: runs.some((r) => r.truncated),
   };

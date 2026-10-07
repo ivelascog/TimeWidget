@@ -7,6 +7,7 @@ import {
   SHEET_COLUMNS,
   toSheetRow,
   aggregateCell,
+  headlineMs,
 } from "../bench/stats.mjs";
 
 test("percentile interpolates like PerformanceMonitor", () => {
@@ -69,7 +70,7 @@ test("sheet columns start with the spreadsheet's", () => {
   ]);
   const row = toSheetRow({
     adapter: "canvas", lines: 1000, points: 20, groups: 1, runs: 5,
-    frameMs: frame, frameP50CI: [9, 11], frameP95CI: [18, 22],
+    frameMs: frame, mainThreadMs: frame, presentedRatio: null, frameP50CI: [9, 11], frameP95CI: [18, 22],
     collisionMs: null, renderMs: null, totalCpuMs: null, loadMs: 50, truncated: false,
   });
   expect(row[0]).toBe(1000);
@@ -90,6 +91,35 @@ test("aggregateCell takes the median of each statistic across runs", () => {
   expect(a.runs).toBe(3);
   expect(a.collisionMs.p95).toBe(20);
   expect(a.frameP50CI[0]).toBeLessThanOrEqual(10);
+});
+
+test("presented frame time is the headline when the trace recorded it", () => {
+  const cell = { adapter: "svg", lines: 5000, points: 100, groups: 1 };
+  const presented = { samples: 27, mean: 28, p50: 27, p95: 40, p99: 45 };
+  const r = {
+    cell, frameMs: frame, presentedMs: presented, presentedRatio: 0.225,
+    collisionMs: null, renderMs: null, totalCpuMs: null, loadMs: 1, truncated: false,
+  };
+  const a = aggregateCell([r, r, r]);
+  expect(a.frameMs.p50).toBe(27); // what reached the screen
+  expect(a.mainThreadMs.p50).toBe(10); // what the page's own clock saw
+  expect(a.presentedRatio).toBeCloseTo(0.225);
+  const row = toSheetRow(a);
+  expect(row[SHEET_COLUMNS.indexOf("FrameMs p50")]).toBe(27);
+  expect(row[SHEET_COLUMNS.indexOf("MainThreadMs p50")]).toBe(10);
+  expect(row[SHEET_COLUMNS.indexOf("Presented ratio")]).toBeCloseTo(0.225);
+});
+
+test("extra swaps without new content do not shorten the headline", () => {
+  // Measured: canvas at 5k x 20 swapped 1.35x per frame; the extra swaps carry
+  // no new content, so the page's own frame time stands.
+  const cell = { adapter: "canvas", lines: 5000, points: 20, groups: 1 };
+  const r = {
+    cell, frameMs: frame, presentedMs: { samples: 400, mean: 2, p50: 2, p95: 3, p99: 4 }, presentedRatio: 1.35,
+    collisionMs: null, renderMs: null, totalCpuMs: null, loadMs: 1, truncated: false,
+  };
+  expect(headlineMs(r)).toBe(frame);
+  expect(headlineMs({ ...r, presentedRatio: 0.97 })).toBe(frame); // edge-of-window noise
 });
 
 test("aggregateCell leaves the breakdown empty for baselines", () => {

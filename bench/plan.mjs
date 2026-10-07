@@ -1,6 +1,7 @@
 // Pure run planning: which cells exist, in what order they run, which are
 // skipped, and what is left when resuming an interrupted session.
 import { mulberry32 } from "./workload.js";
+import { headlineMs } from "./stats.mjs";
 
 export const cellKey = (c) => `${c.adapter}|${c.lines}|${c.points}|${c.groups}`;
 export const seriesKey = (c) => `${c.adapter}|${c.points}|${c.groups}`;
@@ -47,7 +48,7 @@ export function shouldSkip(cell, completed, limitMs = 250) {
     (r) =>
       seriesKey(r.cell) === key &&
       r.cell.lines <= cell.lines &&
-      (r.truncated || r.frameMs.p95 > limitMs)
+      (r.truncated || headlineMs(r).p95 > limitMs)
   );
 }
 
