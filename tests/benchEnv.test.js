@@ -38,10 +38,10 @@ describe("startServer", () => {
   });
   afterAll(() => server.close());
 
-  const get = (p) =>
+  const get = (p, headers = {}) =>
     new Promise((resolve, reject) => {
       // Raw path, so "../" reaches the server instead of being normalised.
-      const req = http.request(server.url + "/", { path: p }, (res) => {
+      const req = http.request(server.url + "/", { path: p, headers }, (res) => {
         res.resume();
         resolve(res);
       });
@@ -58,6 +58,20 @@ describe("startServer", () => {
     expect(res.headers["cross-origin-opener-policy"]).toBe("same-origin");
     expect(res.headers["cross-origin-embedder-policy"]).toBe("require-corp");
     expect(res.headers["content-type"]).toMatch(/text\/html/);
+  });
+  // DNS rebinding: a page on evil.example re-pointed at 127.0.0.1 sends its
+  // own hostname in Host. Without this check it could read the repository
+  // (including .git) for as long as a multi-hour benchmark runs.
+  test("rejects requests whose Host is not the server's own address", async () => {
+    const res = await get("/bench/page.html", { Host: "evil.example:" + new URL(server.url).port });
+    expect(res.statusCode).toBe(403);
+  });
+  test("serves only the directories the harness needs", async () => {
+    expect((await get("/dist/TimeWidget.js")).statusCode).toBe(200);
+    expect((await get("/node_modules/d3/package.json")).statusCode).toBe(200);
+    expect((await get("/.git/HEAD")).statusCode).toBe(404);
+    expect((await get("/package.json")).statusCode).toBe(404);
+    expect((await get("/rendimiento_TimeWidget.xlsx")).statusCode).toBe(404);
   });
   test("does not list directories or escape the root", async () => {
     expect((await get("/bench/")).statusCode).toBe(404);
