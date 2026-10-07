@@ -60,6 +60,23 @@ test.describe("bench harness", () => {
     }
   });
 
+  // Vega-Lite tests points, not segments, so agreement is high but not exact.
+  // A count of 0 everywhere would mean the brush never reached Vega.
+  test("vegalite applies brushes programmatically and mostly agrees with TimeWidget", async ({ page }) => {
+    for (const groups of [1, 3]) {
+      const r = await page.evaluate(
+        (g) => window.benchPreflight({ adapters: ["timewidget", "vegalite"], lines: 1000, points: 20, groups: g }),
+        groups
+      );
+      const tw = r.timewidget.flat();
+      const vl = r.vegalite.flat();
+      expect(vl.some((c) => c > 0)).toBe(true);
+      const diff = tw.reduce((s, c, i) => s + Math.abs(c - vl[i]), 0);
+      const agreement = 1 - diff / Math.max(1, tw.reduce((a, b) => a + b, 0));
+      expect(agreement).toBeGreaterThan(0.9);
+    }
+  });
+
   test("budget truncates a run", async ({ page }) => {
     const r = await page.evaluate(() =>
       window.benchCell({
