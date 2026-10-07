@@ -46,6 +46,19 @@ test.describe("bench harness", () => {
     expect(r.loadMs).toBeGreaterThan(0);
   });
 
+  // Baselines must answer the same query as TimeWidget, or a cheaper baseline
+  // could just be one that selects less.
+  test("naive baselines select exactly what TimeWidget selects", async ({ page }) => {
+    for (const groups of [1, 3]) {
+      const r = await page.evaluate(
+        (g) => window.benchPreflight({ adapters: ["timewidget", "canvas"], lines: 1000, points: 20, groups: g }),
+        groups
+      );
+      expect(r.canvas).toEqual(r.timewidget);
+      expect(r.timewidget.flat().some((c) => c > 0)).toBe(true);
+    }
+  });
+
   test("budget truncates a run", async ({ page }) => {
     const r = await page.evaluate(() =>
       window.benchCell({
