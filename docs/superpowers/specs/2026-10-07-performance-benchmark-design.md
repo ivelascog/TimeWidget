@@ -80,22 +80,32 @@ WebKit as primary targets (optional ecological check only); fixing
 
 FPS is always computed from frame time, never measured directly.
 
-**Amended during implementation (validation §9b).** A Chrome trace showed the
-in-page clock is only right when rendering back-pressures the main thread (GPU
-canvas: TimeWidget, the canvas baseline, Vega-Lite — every measured frame was
-presented). Naive SVG rasterises off the main thread: 120 driver frames at 5k
-series produced 27 swaps, so its in-page frame time (6.3 ms) was ~4× too
-optimistic (~25 ms presented). Every run therefore records a small trace (`viz`
-+ `blink.user_timing`), and when presented/produced frames < 0.95 the headline
-FrameMs is the interval between presented frames. Above 0.95 the in-page time
-stands, because the display also re-swaps without new content when frames take
-~1–3 ms (ratios up to 1.35 observed). Both are kept in the CSV (`MainThreadMs`,
-`Presented ratio`).
+**Amended during implementation (validation §9b, then the SVG investigation).**
+The page's own clock times only the main thread. For TimeWidget, the canvas
+baseline and Vega-Lite the main thread waits for painting, so it is accurate.
+Naive SVG paints off the main thread, and with vsync off a main thread faster
+than the GPU starved it: ~90% of frames dropped (Chrome's own frame reporter
+agreed), and adding 1 ms of useless work made SVG measure *faster* (20 → 5 ms).
+A first fix (headline = interval between presented frames) inherited that
+artifact. Final design (option A, chosen 2026-10-08):
 
-**Frame time definition** (identical for every implementation, and identical to
-the existing TimeWidget monitor so numbers stay comparable): `performance.now()`
-at the next `requestAnimationFrame` minus `performance.now()` immediately before
-the brush update is applied.
+- **Paced frames.** After each frame the driver busy-waits a short gap (10 ms
+  default) so every stage finishes before the next update. Busy-waiting, not
+  sleeping: a sleeping 40 ms gap let the CPU clock down and inflated
+  main-thread time by 75–140%; a spinning gap of 10 or 40 ms did not.
+- **Headline FrameMs = each frame's slowest stage**: max of the page's clock
+  and the busy time, inside that frame's slot, of the GPU main thread, the viz
+  compositor, the renderer compositor and the raster workers (Chrome trace,
+  `toplevel` + `gpu` categories, one `bench-frame` mark per frame).
+- **Pacing check.** If any stage fills > 80% of its slot on > 5% of frames, or
+  < 95% of frames are presented, the run is repeated with a doubled gap
+  (10 → 640 ms), then rejected.
+- Validation (M4 Max): SVG 5k series 1 vs 3 brushes 2.46 vs 2.32 ms (was 20 vs
+  3.3); +1 ms work no longer lowers SVG's cost; TimeWidget and canvas match the
+  unpaced numbers. Bottleneck: SVG always the GPU; TimeWidget, canvas and
+  Vega-Lite always the main thread (TimeWidget's GPU time close behind).
+- CSV adds `GpuMs`, `Bottleneck`, `PaceMs`; `MainThreadMs` and
+  `Presented ratio` stay as diagnostics.
 
 ## 5. Implementations compared
 

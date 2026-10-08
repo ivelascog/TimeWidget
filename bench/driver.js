@@ -9,6 +9,19 @@ import { summarize } from "./stats.mjs";
 const SIZE = { width: 800, height: 600 };
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 
+// Gap after each frame so every pipeline stage (the GPU above all) finishes
+// before the next update; otherwise a fast main thread starves the GPU when
+// vsync is off. Busy-waiting, not sleeping: a sleeping gap of 40 ms let the CPU
+// clock down and inflated main-thread time by 75-140%; spinning did not.
+async function pace(ms) {
+  if (!ms) return;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  const start = performance.now();
+  while (performance.now() - start < ms) {
+    // spin
+  }
+}
+
 async function mount(name) {
   const stage = document.getElementById("stage");
   stage.replaceChildren();
@@ -25,6 +38,7 @@ export async function runCell({
   warmupFrames = 60,
   budgetMs = 60000,
   seed = 12345,
+  paceMs = 10,
 }) {
   const data = generateData(lines, points, seed);
   const extent = dataExtent(data);
@@ -65,10 +79,12 @@ export async function runCell({
       // that actually reached the screen inside the measured window.
       performance.mark("bench-measure-start");
     }
+    if (i >= warmupFrames) performance.mark("bench-frame");
     const start = performance.now();
     await adapter.move(0, step(i));
     await nextFrame();
     if (i >= warmupFrames) frameTimes.push(performance.now() - start);
+    await pace(paceMs);
   }
 
   performance.mark("bench-measure-end");
@@ -89,6 +105,7 @@ export async function runCell({
     visible: document.visibilityState === "visible",
     focused: document.hasFocus(),
     focusLost,
+    paceMs,
   };
   adapter.destroy();
   return result;

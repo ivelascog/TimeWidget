@@ -37,9 +37,9 @@ both. `npm run dev` is `rollup -c -w` — a watch build, **not** a server.
 Canvas, naive SVG and Vega-Lite baselines for the paper. It is **headed** and
 takes 2–3 h; never run it in CI. Default Playwright headless uses a
 software-rasterised canvas, so its frame times are meaningless. Frame time is
-measured with vsync off; when Chrome's trace shows dropped frames (naive SVG
-rasterises off the main thread), the presented-frame interval is the headline
-instead. `tests/e2e/bench.spec.js` checks the adapters' behaviour, never timing.
+measured with vsync off, frames paced by a busy-wait gap, and each frame's
+cost is its slowest pipeline stage (main thread vs. GPU process, from a Chrome
+trace). Without pacing, naive SVG starves the GPU and measures nonsense. `tests/e2e/bench.spec.js` checks the adapters' behaviour, never timing.
 
 **`npm run build` before e2e.** The e2e suite drives `dist/`, not `src/`, so a
 source edit is invisible to it until you rebuild. CI does this explicitly.

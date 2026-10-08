@@ -11,7 +11,8 @@ import { fileURLToPath } from "node:url";
 import { startServer } from "./server.mjs";
 import { collectEnvironment, gpuStatus, checkGate, checkPreflight } from "./env.mjs";
 import { buildCells, orderRuns, shouldSkip, pendingRuns, seriesKey, cellKey } from "./plan.mjs";
-import { presentedFrames, presentedResult } from "./trace.mjs";
+import { presentedFrames, presentedResult, frameStageBusy, frameCosts, pacingCheck } from "./trace.mjs";
+import { summarize } from "./stats.mjs";
 import {
   headlineMs,
   aggregateCell,
@@ -164,31 +165,58 @@ function withTimeout(promise, ms) {
 
 // A crash is recorded, not thrown: the session continues, and shouldSkip
 // keeps --resume from retrying the same cell forever.
+// Pacing gaps tried in order: if a stage's work does not fit in its frame's
+// slot (or frames still drop), the run is repeated with a doubled gap.
+const PACE_STEPS_MS = [10, 20, 40, 80, 160, 320, 640];
+
 async function runOneSafely(pageUrl, cell, rep) {
+  const attempts = [];
   try {
-    return await withTimeout(runOne(pageUrl, cell, rep), RUN_TIMEOUT_MS);
+    for (const paceMs of PACE_STEPS_MS) {
+      const record = await withTimeout(runOne(pageUrl, cell, rep, paceMs), RUN_TIMEOUT_MS);
+      if (record.type !== "run" || !record.pacing || record.pacing.ok) {
+        if (attempts.length) record.pacingAttempts = attempts;
+        return record;
+      }
+      attempts.push({ paceMs, reason: record.pacing.reason });
+    }
+    return { type: "reject", cell, rep, reasons: ["pacing never let every stage finish"], pacingAttempts: attempts };
   } catch (e) {
-    return { type: "crash", cell, rep, error: String(e && e.message ? e.message : e) };
+    return { type: "crash", cell, rep, error: String(e && e.message ? e.message : e), pacingAttempts: attempts };
   }
 }
 
-async function runOne(pageUrl, cell, rep) {
+async function runOne(pageUrl, cell, rep, paceMs) {
   const { browser, page } = await launch();
   try {
     await openHarness(page, pageUrl);
     const g = await gate(browser, page);
     if (!g.ok) return { type: "reject", cell, rep, reasons: g.reasons };
-    // Only the swap and user-timing categories: small, and cheap to record.
-    await browser.startTracing(page, { categories: ["viz", "blink.user_timing"] });
-    const result = await page.evaluate((o) => window.benchCell(o), Object.assign({}, cell, { frames, warmupFrames }));
-    const presented = presentedFrames(JSON.parse((await browser.stopTracing()).toString()).traceEvents);
+    // Marks, swaps, and top-level tasks per thread. Recording the task events
+    // did not change main-thread timings measurably (2.81 vs 2.76 ms).
+    await browser.startTracing(page, { categories: ["blink.user_timing", "viz", "toplevel", "gpu"] });
+    const result = await page.evaluate(
+      (o) => window.benchCell(o),
+      Object.assign({}, cell, { frames, warmupFrames, paceMs })
+    );
+    const events = JSON.parse((await browser.stopTracing()).toString()).traceEvents;
+    const presented = presentedFrames(events);
     if (!result.visible || !result.focused || result.focusLost) {
       return { type: "reject", cell, rep, reasons: ["lost visibility or focus during the run"] };
     }
     if (result.measuredFrames > 0) {
       const p = presentedResult(presented, result.measuredFrames);
       if (p.error) return { type: "reject", cell, rep, reasons: [p.error] };
+      delete p.presentedMs; // swap intervals are diagnostics only now
       Object.assign(result, p);
+      const busy = frameStageBusy(events);
+      if (!busy) return { type: "reject", cell, rep, reasons: ["trace has no per-frame marks"] };
+      const costs = frameCosts(result.frames, busy.stages);
+      result.frameCostMs = summarize(costs.costMs);
+      result.gpuMs = summarize(costs.gpuMs);
+      result.bottleneck = Object.entries(costs.bottleneck).sort((a, b) => b[1] - a[1])[0][0];
+      result.bottleneckFrames = costs.bottleneck;
+      result.pacing = pacingCheck(busy, result.presentedRatio);
     }
     return Object.assign({ type: "run", cell, rep }, result);
   } finally {

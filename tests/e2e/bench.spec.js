@@ -87,6 +87,18 @@ test.describe("bench harness", () => {
     expect(r.measuredFrames).toBeLessThan(300);
   });
 
+  // The trace buckets each stage's work by these marks, one per measured frame.
+  test("each measured frame is marked, and the pacing gap is reported", async ({ page }) => {
+    const r = await page.evaluate(async () => {
+      performance.clearMarks();
+      const res = await window.benchCell({ adapter: "timewidget", lines: 300, points: 20, groups: 1, frames: 12, warmupFrames: 3, paceMs: 2 });
+      return { res, marks: performance.getEntriesByName("bench-frame").length };
+    });
+    expect(r.marks).toBe(12);
+    expect(r.res.measuredFrames).toBe(12);
+    expect(r.res.paceMs).toBe(2);
+  });
+
   // Review finding: focus checked only at start and end; a focus steal in the
   // middle of a run passed both checks.
   test("a blur during the run is recorded", async ({ page }) => {

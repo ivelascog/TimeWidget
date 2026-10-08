@@ -65,14 +65,16 @@ Before measuring, it checks the environment and aborts if:
 
 ## What is measured
 
-- **FrameMs** (headline): time from applying one brush step to the next
-  `requestAnimationFrame`, with vsync and the frame-rate limit off so the
-  monitor's refresh rate does not cap or quantise it. When Chrome's trace shows
-  that fewer frames reached the screen than were produced (naive SVG), FrameMs
-  is the interval between frames actually presented instead. FPS columns are
-  `1000 / FrameMs`.
-- **MainThreadMs**, **Presented ratio**: the in-page time and presented/produced
-  frames, kept so the two definitions can be compared.
+- **FrameMs** (headline): the cost of each frame's slowest pipeline stage —
+  the page's own clock (brush step → next `requestAnimationFrame`) or the busy
+  time of the GPU process and compositors for that frame, read from a Chrome
+  trace. Vsync and the frame-rate limit are off, so the monitor does not cap or
+  quantise it, and frames are paced (a short busy-wait gap) so a fast main
+  thread cannot starve the GPU. FPS columns are `1000 / FrameMs`.
+- **MainThreadMs**, **GpuMs**, **Bottleneck**: the two main stages separately,
+  and which one limited most frames.
+- **PaceMs**, **Presented ratio**: the gap that let every stage finish (doubled
+  automatically when needed) and presented/produced frames (should be ~1).
 - **CollisionMs, RenderMs, TotalCpuMs** (TimeWidget only): its internal
   breakdown. RenderMs is the time to *issue* canvas commands; rasterisation
   happens later on the GPU and is only visible in FrameMs.

@@ -76,18 +76,10 @@ export function linearFit(xs, ys) {
   return { slope, intercept: my - slope * mx, r2: syy === 0 ? 1 : (sxy * sxy) / (sxx * syy) };
 }
 
-// The headline frame time of a run. When frames were dropped (fewer swaps
-// than frames produced), the interval between frames that reached the screen;
-// otherwise the in-page clock. See trace.mjs for why they differ (SVG drops
-// frames without blocking the main thread). Swaps can also outnumber frames
-// (the display re-swaps without new content when frames take ~1-3 ms); those
-// extra swaps carry nothing new, so they must not shorten the headline.
-export const DROPPED_FRAMES_RATIO = 0.95;
-
+// The headline frame time of a run: each paced frame's slowest pipeline
+// stage, when the trace recorded it (see trace.mjs); else the page's clock.
 export function headlineMs(run) {
-  const dropped =
-    run.presentedMs && run.presentedMs.samples && run.presentedRatio !== null && run.presentedRatio < DROPPED_FRAMES_RATIO;
-  return dropped ? run.presentedMs : run.frameMs;
+  return run.frameCostMs && run.frameCostMs.samples ? run.frameCostMs : run.frameMs;
 }
 
 const STATS = ["mean", "p50", "p95", "p99"];
@@ -118,6 +110,9 @@ export const SHEET_COLUMNS = [
   ...metricCols("MainThreadMs"),
   "Presented ratio",
   "Presented frames",
+  ...metricCols("GpuMs"),
+  "Bottleneck",
+  "PaceMs",
 ];
 
 const fps = (ms) => (ms && ms > 0 ? 1000 / ms : "");
@@ -148,6 +143,9 @@ export function toSheetRow(c) {
     ...cols(c.mainThreadMs),
     c.presentedRatio === null || c.presentedRatio === undefined ? "" : c.presentedRatio,
     c.presentedFrames === null || c.presentedFrames === undefined ? "" : c.presentedFrames,
+    ...cols(c.gpuMs),
+    c.bottleneck || "",
+    c.paceMs === null || c.paceMs === undefined ? "" : c.paceMs,
   ];
 }
 
@@ -161,8 +159,16 @@ const medianSummary = (runs, get) =>
     ? Object.fromEntries(["samples", ...STATS].map((s) => [s, medianOf(runs, (r) => get(r)[s])]))
     : null;
 
+function mostCommon(values) {
+  const counts = new Map();
+  for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+  let best = null;
+  for (const [v, n] of counts) if (best === null || n > counts.get(best)) best = v;
+  return best;
+}
+
 // runs: run records of one cell (driver.js runCell results plus {cell} and,
-// from run.mjs, presentedMs/presentedRatio).
+// from run.mjs, frameCostMs/gpuMs/bottleneck/paceMs/presentedRatio).
 export function aggregateCell(runs) {
   const { adapter, lines, points, groups } = runs[0].cell;
   return {
@@ -177,6 +183,9 @@ export function aggregateCell(runs) {
     mainThreadMs: medianSummary(runs, (r) => r.frameMs),
     presentedRatio: medianOf(runs, (r) => r.presentedRatio),
     presentedFrames: medianOf(runs, (r) => r.presentedFrames),
+    gpuMs: medianSummary(runs, (r) => r.gpuMs),
+    bottleneck: mostCommon(runs.map((r) => r.bottleneck).filter(Boolean)),
+    paceMs: runs.some((r) => r.paceMs !== undefined) ? Math.max(...runs.map((r) => r.paceMs || 0)) : null,
     collisionMs: medianSummary(runs, (r) => r.collisionMs),
     renderMs: medianSummary(runs, (r) => r.renderMs),
     totalCpuMs: medianSummary(runs, (r) => r.totalCpuMs),

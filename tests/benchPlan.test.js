@@ -41,8 +41,8 @@ describe("shouldSkip", () => {
   test("does not skip while under the limit", () => {
     expect(shouldSkip(big, done(20))).toBe(false);
   });
-  test("judges by presented frame time when it was recorded", () => {
-    const r = [{ cell: small, rep: 0, frameMs: { p95: 20 }, presentedMs: { samples: 9, p95: 400 }, presentedRatio: 0.1, truncated: false }];
+  test("judges by per-frame stage cost when it was recorded", () => {
+    const r = [{ cell: small, rep: 0, frameMs: { p95: 20 }, frameCostMs: { samples: 300, p95: 400 }, truncated: false }];
     expect(shouldSkip(big, r)).toBe(true);
   });
   test("a truncated run counts as over the limit", () => {

@@ -94,35 +94,32 @@ test("aggregateCell takes the median of each statistic across runs", () => {
   expect(a.frameP50CI[0]).toBeLessThanOrEqual(10);
 });
 
-test("presented frame time is the headline when the trace recorded it", () => {
-  const cell = { adapter: "svg", lines: 5000, points: 100, groups: 1 };
-  const presented = { samples: 27, mean: 28, p50: 27, p95: 40, p99: 45 };
+test("per-frame stage cost is the headline when the trace recorded it", () => {
+  // SVG at 5k series: the page's clock says 1.1 ms, but the GPU needs 2.5 ms
+  // per frame; the slower stage is what a paced pipeline can sustain.
+  const cell = { adapter: "svg", lines: 5000, points: 20, groups: 1 };
+  const cost = { samples: 300, mean: 2.5, p50: 2.5, p95: 3, p99: 3.2 };
+  const gpu = { samples: 300, mean: 2.5, p50: 2.5, p95: 3, p99: 3.2 };
   const r = {
-    cell, frameMs: frame, presentedMs: presented, presentedRatio: 0.225, presentedFrames: 27,
+    cell, frameMs: frame, frameCostMs: cost, gpuMs: gpu, bottleneck: "gpuMain", paceMs: 10,
+    presentedRatio: 1, presentedFrames: 300,
     collisionMs: null, renderMs: null, totalCpuMs: null, loadMs: 1, truncated: false,
   };
+  expect(headlineMs(r)).toBe(cost);
+  expect(headlineMs({ ...r, frameCostMs: undefined })).toBe(frame);
   const a = aggregateCell([r, r, r]);
-  expect(a.frameMs.p50).toBe(27); // what reached the screen
-  expect(a.mainThreadMs.p50).toBe(10); // what the page's own clock saw
-  expect(a.presentedRatio).toBeCloseTo(0.225);
+  expect(a.frameMs.p50).toBe(2.5);
+  expect(a.mainThreadMs.p50).toBe(10);
+  expect(a.gpuMs.p95).toBe(3);
+  expect(a.bottleneck).toBe("gpuMain");
+  expect(a.paceMs).toBe(10);
   const row = toSheetRow(a);
-  expect(row[SHEET_COLUMNS.indexOf("FrameMs p50")]).toBe(27);
+  expect(row[SHEET_COLUMNS.indexOf("FrameMs p50")]).toBe(2.5);
   expect(row[SHEET_COLUMNS.indexOf("MainThreadMs p50")]).toBe(10);
-  expect(row[SHEET_COLUMNS.indexOf("Presented ratio")]).toBeCloseTo(0.225);
-  // How many presented intervals the headline percentiles rest on.
-  expect(row[SHEET_COLUMNS.indexOf("Presented frames")]).toBe(27);
-});
-
-test("extra swaps without new content do not shorten the headline", () => {
-  // Measured: canvas at 5k x 20 swapped 1.35x per frame; the extra swaps carry
-  // no new content, so the page's own frame time stands.
-  const cell = { adapter: "canvas", lines: 5000, points: 20, groups: 1 };
-  const r = {
-    cell, frameMs: frame, presentedMs: { samples: 400, mean: 2, p50: 2, p95: 3, p99: 4 }, presentedRatio: 1.35,
-    collisionMs: null, renderMs: null, totalCpuMs: null, loadMs: 1, truncated: false,
-  };
-  expect(headlineMs(r)).toBe(frame);
-  expect(headlineMs({ ...r, presentedRatio: 0.97 })).toBe(frame); // edge-of-window noise
+  expect(row[SHEET_COLUMNS.indexOf("GpuMs p95")]).toBe(3);
+  expect(row[SHEET_COLUMNS.indexOf("Bottleneck")]).toBe("gpuMain");
+  expect(row[SHEET_COLUMNS.indexOf("PaceMs")]).toBe(10);
+  expect(row[SHEET_COLUMNS.indexOf("Presented ratio")]).toBe(1);
 });
 
 test("aggregateCell leaves the breakdown empty for baselines", () => {
