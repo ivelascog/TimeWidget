@@ -43,7 +43,7 @@ function TimeWidget(
     referenceCurves = null, // Specifies a Json object with the information of the reference lines.
     fmtX, // Function, how to format x points in the tooltip. If not provided will try to guess if it is a date or a number
     fmtY = d3.format(".1f"), // Function, how to format x points in the tooltip
-    stepX = { days: 10 }, // Defines the step used, both in the spinboxes and with the arrows on the X axis.
+    stepX, // Defaults to 1 for numeric X axes or { days: 10 } for dates.
     stepY = 1, // // Defines the step used, both in the spinboxes and with the arrows on the Y axis.
     snapX = null, // Domain interval to which brush X coordinates are snapped. Dates accept a date-fns Duration or milliseconds.
     snapY = null, // Domain interval to which brush Y coordinates are snapped.
@@ -499,7 +499,12 @@ function TimeWidget(
     // clip-path instead (see #65).
     overviewY.range([height - ts.margin.top - ts.margin.bottom, 0]).nice();
     overviewY.domain(expandDomainToSnap(overviewY.domain(), snapY));
-    ts.stepX = stepAtLeastSnap(stepX, snapX, overviewX.domain());
+    const defaultStepX = overviewX.domain()[0] instanceof Date ? { days: 10 } : 1;
+    ts.stepX = stepAtLeastSnap(
+      stepX === undefined ? defaultStepX : stepX,
+      snapX,
+      overviewX.domain()
+    );
     ts.stepY = stepAtLeastSnap(stepY, snapY, overviewY.domain());
   }
 
