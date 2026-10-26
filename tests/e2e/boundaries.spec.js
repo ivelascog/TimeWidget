@@ -164,7 +164,7 @@ test("crossing the numeric Y bounds advances the opposite edge by stepY", async 
   expect(d[1][1]).toBeCloseTo(60, 5);
 });
 
-test("keyboard commands with no selected TimeBox leave the query unchanged", async ({
+test("keyboard commands with no active TimeBox leave the query unchanged", async ({
   page,
 }) => {
   await mount(page);

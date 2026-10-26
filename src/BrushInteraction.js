@@ -41,8 +41,8 @@ function brushInteraction({
   minBrushSize = 5, // Min size in pixels of brushes
   selectionCallback = () => {}, // (dataSelected, dataNotSelected, hasSelection) => {} Called when selected elements change
   groupsCallback = () => {}, // (groups) => {} Called when information of the groups changes (not the selection made by them)
-  changeSelectedCoordinatesCallback = () => {}, // (selection) => {} Called when the coordinates of the selected brush change.
-  selectedBrushCallback = () => {}, // (brush) => {} Called when the selected Brush changes.
+  changeActiveCoordinatesCallback = () => {}, // (selection) => {} Called when the coordinates of the active brush change.
+  activeBrushCallback = () => {}, // (brush) => {} Called when the active Brush changes.
   statusCallback = () => {}, // (status) => {}
 }) {
   const hasSnapX = isValidSnapInterval(snapX, scaleX.domain());
@@ -61,7 +61,7 @@ function brushInteraction({
     tShowTooltip,
     tSelectionCall,
     brushGroupSelected,
-    selectedBrush,
+    activeBrush,
     dataSelected,
     dataNotSelected,
     BVH_,
@@ -81,7 +81,7 @@ function brushInteraction({
   tBrushed = scheduleBrushUpdate;
   tUpdateSelection = scheduleSelectionUpdate;
   tShowTooltip = throttle(50, showBrushTooltip);
-  tSelectionCall = throttle(50, updateSelectedCoordinates);
+  tSelectionCall = throttle(50, updateActiveCoordinates);
 
   dataSelected = new Map();
   dataNotSelected = data;
@@ -167,8 +167,8 @@ function brushInteraction({
       brushSize++;
       changeBrushOfGroup([id, brush], brushGroupSelected);
       brushesGroup.get(brushGroupSelected).isEnable = true;
-      selectedBrush = [id, brush];
-      selectedBrushCallback(selectedBrush);
+      activeBrush = [id, brush];
+      activeBrushCallback(activeBrush);
       drawBrushes();
     }
     if (ts.autoUpdate) {
@@ -238,8 +238,9 @@ function brushInteraction({
       brushesGroup.get(brushGroupSelected).brushes.get(brushCount),
     ];
     brush.on("brush.move", (event) => {
-      if (!canMoveSelectedBrushes(event))
-        event = adjustSelectedBrushes(event)
+      if (!canMoveSelectedBrushes(event)) {
+        event = adjustSelectedBrushes(event);
+      }
 
       moveSelectedBrushes(event, brushObject);
       tSelectionCall(event, brushObject);
@@ -380,9 +381,9 @@ function brushInteraction({
   function removeBrush([id, brush]) {
     brushSize--;
     brushesGroup.get(brush.group).brushes.delete(id);
-    if (selectedBrush && selectedBrush[0] === id) {
-      selectedBrush = null;
-      selectedBrushCallback(null);
+    if (activeBrush && activeBrush[0] === id) {
+      activeBrush = null;
+      activeBrushCallback(null);
     }
 
     drawBrushes();
@@ -400,11 +401,11 @@ function brushInteraction({
     groupsCallback(brushesGroup);
   }
 
-  function updateSelectedCoordinates({ selection }, brush = selectedBrush) {
-    if (!selectedBrush || !brush || brush[0] !== selectedBrush[0]) return;
+  function updateActiveCoordinates({ selection }, brush = activeBrush) {
+    if (!activeBrush || !brush || brush[0] !== activeBrush[0]) return;
     selection = snapSelectionPixels(selection);
     let selectionDomain = getSelectionDomain(selection);
-    changeSelectedCoordinatesCallback(selectionDomain);
+    changeActiveCoordinatesCallback(selectionDomain);
   }
 
   // Calculates whether a line intersects a complete brushGroup.
@@ -490,6 +491,8 @@ function brushInteraction({
         }
       }
     }
+
+    if (!triggerBrush || !triggerBrush.isSelected) return true;
 
     if (hasSnapX || hasSnapY) selection = snapSelectionPixels(selection);
 
@@ -618,6 +621,9 @@ function brushInteraction({
       gBrushes.selectAll("#brush-" + triggerId),
       triggerBrush
     );
+    // Activation alone must not move or constrain the multiple selection.
+    if (!triggerBrush.isSelected) return;
+
     for (const brushGroup of brushesGroup.values()) {
       for (const [brushId, brush] of brushGroup.brushes) {
         if (brush.isSelected && !(triggerId === brushId)) {
@@ -667,7 +673,7 @@ function brushInteraction({
   function selectBrush(brush) {
     brush[1].isSelected = !brush[1].isSelected;
     updateGroups();
-    selectedBrushCallback(selectedBrush);
+    activeBrushCallback(activeBrush);
   }
 
   function deselectAllBrushes() {
@@ -676,8 +682,8 @@ function brushInteraction({
         brush[1].isSelected = false;
       }
     }
-    selectedBrush = null;
-    selectedBrushCallback(null);
+    activeBrush = null;
+    activeBrushCallback(null);
   }
 
   function getUnusedIdBrushGroup() {
@@ -695,8 +701,8 @@ function brushInteraction({
     return lastKey;
   }
 
-  function brushShadowIfSelected(d) {
-    return selectedBrush && d[0] === selectedBrush[0] ? brushShadow : "";
+  function brushShadowIfActive(d) {
+    return activeBrush && d[0] === activeBrush[0] ? brushShadow : "";
   }
 
   function showBrushTooltip({ selection, sourceEvent }, brush) {
@@ -770,21 +776,21 @@ function brushInteraction({
       .on("mousedown", (sourceEvent) => {
         if (
           sourceEvent.button !== 0 ||
-          (selectedBrush && selectedBrush[0] === d[0])
+          (activeBrush && activeBrush[0] === d[0])
         ) return;
 
-        // A press selects an inactive TimeBox for both a click and a drag.
+        // A press activates an inactive TimeBox for both a click and a drag.
         // Pressing an already active TimeBox leaves its state unchanged.
-        selectedBrush = d;
-        selectedBrushCallback(selectedBrush);
-        updateSelectedCoordinates(
+        activeBrush = d;
+        activeBrushCallback(activeBrush);
+        updateActiveCoordinates(
           { selection: brushValue.selection },
-          selectedBrush
+          activeBrush
         );
         gBrushes
           .selectAll(".brush")
-          .style("-webkit-filter", brushShadowIfSelected)
-          .style("filter", brushShadowIfSelected);
+          .style("-webkit-filter", brushShadowIfActive)
+          .style("filter", brushShadowIfActive);
       })
       .on("click", (sourceEvent) => {
         if (sourceEvent.button === 0 && sourceEvent.shiftKey) {
@@ -889,8 +895,8 @@ function brushInteraction({
         // Actually create the d3 brush
         return d3.select(this).call(brush.brush);
       })
-      .style("-webkit-filter", brushShadowIfSelected)
-      .style("filter", brushShadowIfSelected)
+      .style("-webkit-filter", brushShadowIfActive)
+      .style("filter", brushShadowIfActive)
       .style("display", (d) =>
         brushesGroup.get(d[1].group).isEnable ? "" : "none"
       ) // Hide brushes when their group is not enabled
@@ -979,10 +985,10 @@ function brushInteraction({
 
     if (!newState) {
       // Hide tooltip if it was in a brush of that group.
-      if (selectedBrush && selectedBrush[1].group === id) {
+      if (activeBrush && activeBrush[1].group === id) {
         brushTooltip.__hide();
-        selectedBrush = null;
-        selectedBrushCallback(null);
+        activeBrush = null;
+        activeBrushCallback(null);
       }
     }
 
@@ -1070,33 +1076,33 @@ function brushInteraction({
     return brushGroupSelected;
   };
 
-  me.removeSelectedBrush = function () {
-    if (selectedBrush) removeBrush(selectedBrush);
+  me.removeActiveBrush = function () {
+    if (activeBrush) removeBrush(activeBrush);
   };
 
-  me.getSelectedBrush = function () {
-    return selectedBrush;
+  me.getActiveBrush = function () {
+    return activeBrush;
   };
 
   me.hasSelection = function () {
     return brushSize !== 0;
   };
 
-  me.deselectBrush = function () {
-    if (selectedBrush) {
-      selectedBrush = null;
+  me.deactivateBrush = function () {
+    if (activeBrush) {
+      activeBrush = null;
       drawBrushes();
-      selectedBrushCallback(selectedBrush);
+      activeBrushCallback(activeBrush);
     }
   };
 
-  me.changeSelectedBrushMode = function (brushMode) {
-    selectedBrush.mode = brushMode;
-    updateBrush(selectedBrush);
+  me.changeActiveBrushMode = function (brushMode) {
+    activeBrush.mode = brushMode;
+    updateBrush(activeBrush);
   };
 
-  me.changeSelectedBrushAggregation = function (brushAggregation) {
-    selectedBrush.aggregation = brushAggregation;
+  me.changeActiveBrushAggregation = function (brushAggregation) {
+    activeBrush.aggregation = brushAggregation;
     brushFilter();
   };
 
@@ -1161,6 +1167,10 @@ function brushInteraction({
       moveSelectedBrushes({ selection, sourceEvent }, [brushID, brushValue]);
     } else {
       brushed({ selection, sourceEvent }, [brushID, brushValue]);
+      updateCirclesSelected(
+        gBrushes.selectAll("#brush-" + brushID),
+        brushValue
+      );
       brushTooltip.__update({
         selection: selectionDomain,
         selectionPixels: selection,
@@ -1168,21 +1178,21 @@ function brushInteraction({
     }
   };
 
-  me.moveSelectedBrush = function (
+  me.moveActiveBrush = function (
     [[x0, y0], [x1, y1]],
     moveSelection = false
   ) {
-    //log("Move selected brush", selectedBrush);
-    if (!selectedBrush) {
+    //log("Move active brush", activeBrush);
+    if (!activeBrush) {
       log(
-        "🚫 ERROR moveSelectedBrush called but selectedBrush is falsy ",
-        selectedBrush
+        "🚫 ERROR moveActiveBrush called but activeBrush is falsy ",
+        activeBrush
       );
       return;
     }
 
     me.moveBrush(
-      selectedBrush,
+      activeBrush,
       [
         [x0, y0],
         [x1, y1],

@@ -394,3 +394,10 @@ These research tools are the result of a collaboration between:
 * Norhteastern University in Sillicon Valley ([John Alexis Guerra Gomez](https://johnguerra.co)) 
 
 
+
+### Active and selected TimeBoxes
+
+The **active TimeBox** has keyboard focus, appears darker, and receives keyboard
+commands and coordinate edits.
+**Selected TimeBoxes** are those included in the multiple selection with Shift
+(`isSelected`); selection and activation are separate states.

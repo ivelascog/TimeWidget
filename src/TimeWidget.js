@@ -553,7 +553,7 @@ function TimeWidget(
           case "r":
           case "Backspace":
           case "Delete":
-            brushes.removeSelectedBrush();
+            brushes.removeActiveBrush();
             break;
           case "+":
             onAddBrushGroup();
@@ -754,8 +754,8 @@ function TimeWidget(
       ],
       selectionCallback: onSelectionChange,
       groupsCallback: onBrushGroupsChange,
-      changeSelectedCoordinatesCallback: onBrushCoordinatesChange,
-      selectedBrushCallback: onSelectedBrushChange,
+      changeActiveCoordinatesCallback: onBrushCoordinatesChange,
+      activeBrushCallback: onActiveBrushChange,
     });
 
     gGroupBrushes
@@ -798,16 +798,16 @@ function TimeWidget(
     return g;
   }
 
-  // Callback that is called every time the coordinates of the selected brush are modified.
+  // Callback that is called every time the coordinates of the active brush are modified.
   function onBrushCoordinatesChange(selection) {
-    const hasSelectedBrush = Boolean(brushes.getSelectedBrush() && selection);
-    setBrushSpinBoxesEnabled(hasSelectedBrush);
-    updateBrushSpinBox(hasSelectedBrush ? selection : null);
+    const hasActiveBrush = Boolean(brushes.getActiveBrush() && selection);
+    setBrushSpinBoxesEnabled(hasActiveBrush);
+    updateBrushSpinBox(hasActiveBrush ? selection : null);
     updateStatus();
   }
 
-  function onSelectedBrushChange(selectedBrush) {
-    const selection = selectedBrush && selectedBrush[1].selectionDomain;
+  function onActiveBrushChange(activeBrush) {
+    const selection = activeBrush && activeBrush[1].selectionDomain;
     setBrushSpinBoxesEnabled(Boolean(selection));
     updateBrushSpinBox(selection);
   }
@@ -914,7 +914,7 @@ function TimeWidget(
       [x0, y0],
       [x1, y1],
     ];
-    onSelectedBrushChange(null);
+    onActiveBrushChange(null);
 
     if (showBrushesCoordinates) {
       selection.insert("h3", ":first-child").text("Coordinates:");
@@ -1019,8 +1019,8 @@ function TimeWidget(
 
   // Callback that is called when the value of the spinboxes is modified.
   function onSpinboxChange(sourceEvent) {
-    let selectedBrush = brushes.getSelectedBrush();
-    if (selectedBrush === null) return;
+    let activeBrush = brushes.getActiveBrush();
+    if (activeBrush === null) return;
 
     let [[sx0, sy0], [sx1, sy1]] = brushSpinBoxes;
 
@@ -1084,17 +1084,17 @@ function TimeWidget(
       }
     }
 
-    brushes.moveSelectedBrush([
+    brushes.moveActiveBrush([
       [x0, y0],
       [x1, y1],
     ]);
   }
 
   function onArrowRigth() {
-    let selectedBrush = brushes.getSelectedBrush();
-    if (selectedBrush === null || selectedBrush === undefined) return;
+    let activeBrush = brushes.getActiveBrush();
+    if (activeBrush === null || activeBrush === undefined) return;
 
-    let [[x0, y0], [x1, y1]] = selectedBrush[1].selectionDomain;
+    let [[x0, y0], [x1, y1]] = activeBrush[1].selectionDomain;
 
     let maxX = overviewX.domain()[1];
 
@@ -1119,7 +1119,7 @@ function TimeWidget(
       }
     }
 
-    brushes.moveSelectedBrush(
+    brushes.moveActiveBrush(
       [
         [x0, y0],
         [x1, y1],
@@ -1129,10 +1129,10 @@ function TimeWidget(
   }
 
   function onArrowLeft() {
-    let selectedBrush = brushes.getSelectedBrush();
-    if (selectedBrush === null || selectedBrush === undefined) return;
+    let activeBrush = brushes.getActiveBrush();
+    if (activeBrush === null || activeBrush === undefined) return;
 
-    let [[x0, y0], [x1, y1]] = selectedBrush[1].selectionDomain;
+    let [[x0, y0], [x1, y1]] = activeBrush[1].selectionDomain;
 
     let minX = overviewX.domain()[0];
 
@@ -1157,7 +1157,7 @@ function TimeWidget(
       }
     }
 
-    brushes.moveSelectedBrush(
+    brushes.moveActiveBrush(
       [
         [x0, y0],
         [x1, y1],
@@ -1167,10 +1167,10 @@ function TimeWidget(
   }
 
   function onArrowDown() {
-    let selectedBrush = brushes.getSelectedBrush();
-    if (selectedBrush === null || selectedBrush === undefined) return;
+    let activeBrush = brushes.getActiveBrush();
+    if (activeBrush === null || activeBrush === undefined) return;
 
-    let [[x0, y0], [x1, y1]] = selectedBrush[1].selectionDomain;
+    let [[x0, y0], [x1, y1]] = activeBrush[1].selectionDomain;
 
     y1 -= ts.stepY;
 
@@ -1183,7 +1183,7 @@ function TimeWidget(
     } else {
       y0 -= ts.stepY;
     }
-    brushes.moveSelectedBrush(
+    brushes.moveActiveBrush(
       [
         [x0, y0],
         [x1, y1],
@@ -1193,10 +1193,10 @@ function TimeWidget(
   }
 
   function onArrowUp() {
-    let selectedBrush = brushes.getSelectedBrush();
-    if (selectedBrush === null || selectedBrush === undefined) return;
+    let activeBrush = brushes.getActiveBrush();
+    if (activeBrush === null || activeBrush === undefined) return;
 
-    let [[x0, y0], [x1, y1]] = selectedBrush[1].selectionDomain;
+    let [[x0, y0], [x1, y1]] = activeBrush[1].selectionDomain;
 
     y0 += ts.stepY;
 
@@ -1210,7 +1210,7 @@ function TimeWidget(
       y1 += ts.stepY;
     }
 
-    brushes.moveSelectedBrush(
+    brushes.moveActiveBrush(
       [
         [x0, y0],
         [x1, y1],
@@ -1445,7 +1445,7 @@ function TimeWidget(
   }
 
   /*function brushesToDomain(brushesGroup) {
-      let selectedBrush = brushes.getSelectedBrush();
+      let activeBrush = brushes.getActiveBrush();
       let outMap = new Map();
       for (let brushGroup of brushesGroup.entries()) {
         let innerMap = new Map();
@@ -1470,7 +1470,7 @@ function TimeWidget(
               [xi1, yi1],
             ];
 
-            nBrush.isActive = !!selectedBrush && selectedBrush[0] === brush[0];
+            nBrush.isActive = !!activeBrush && activeBrush[0] === brush[0];
 
             innerMap.set(brush[0], nBrush);
           }

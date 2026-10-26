@@ -79,7 +79,7 @@ queda pendiente de la revisión solicitada por el usuario.
 | Caso                               | Esperado por el test                    | Observado                                                                                           |
 | ---------------------------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Snapping de fechas                 | Comparar días como strings              | `p[0].slice is not a function`: el valor recibido no es string                                      |
-| Flechas sin TimeBox seleccionado   | Ningún error de navegador               | Cuatro excepciones `Cannot read properties of undefined (reading '1')`                              |
+| Flechas sin TimeBox activa   | Ningún error de navegador               | Cuatro excepciones `Cannot read properties of undefined (reading '1')`                              |
 | Dibujo con `autoUpdate=false`      | Selección correcta sin excepciones      | La selección pasa, pero se capturan ocho excepciones `Cannot read properties of null (reading '0')` |
 | Inversión con `i`                  | Cambiar de `low` a `high`               | Sigue seleccionado `low`; revisar la semántica esperada de inversión                                |
 | Deshabilitar grupo                 | Cero rectángulos de selección en el DOM | Permanece uno; revisar ocultación frente a eliminación del DOM                                      |

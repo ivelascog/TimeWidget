@@ -16,7 +16,7 @@ import {
 
 test.beforeEach(async ({ page }) => open(page));
 
-test("coordinates are empty and disabled until a TimeBox is selected", async ({
+test("coordinates are empty and disabled until a TimeBox is active", async ({
   page,
 }) => {
   await mount(page);
@@ -66,7 +66,7 @@ for (const [arrow, dx, dy] of [
   ["ArrowUp", 0, 5],
   ["ArrowDown", 0, -5],
 ]) {
-  test(`${arrow} translates a selected TimeBox preserving its size`, async ({
+  test(`${arrow} translates an active TimeBox preserving its size`, async ({
     page,
   }) => {
     await mount(page, { filters: [group()] });
@@ -81,7 +81,7 @@ for (const [arrow, dx, dy] of [
 }
 
 for (const value of ["Delete", "Backspace", "r"]) {
-  test(`${value} removes the selected TimeBox and clears coordinates`, async ({
+  test(`${value} removes the active TimeBox and clears coordinates`, async ({
     page,
   }) => {
     await mount(page, { filters: [group()] });
@@ -94,7 +94,7 @@ for (const value of ["Delete", "Backspace", "r"]) {
   });
 }
 
-test("drag a selected TimeBox and resize it through an east handle", async ({
+test("drag an active TimeBox and resize it through an east handle", async ({
   page,
 }) => {
   await mount(page, { filters: [group()] });
@@ -233,3 +233,77 @@ test("editable tooltip updates a coordinate on Enter and hides after leaving", a
   await page.mouse.move(1000, 700);
   await expect(tooltip.locator("input.x0")).toBeHidden();
 });
+
+for (const autoUpdate of [true, false]) {
+  for (const [input, value] of [
+    [0, "2.5"],
+    [1, "4.5"],
+    [2, "45"],
+    [3, "55"],
+  ]) {
+    test(`coordinate input ${input} updates only the active TimeBox's selection points with autoUpdate=${autoUpdate}`, async ({
+      page,
+    }) => {
+      await mount(page, {
+        autoUpdate,
+        filters: [
+          group([
+            filter([
+              [2, 60],
+              [4, 40],
+            ]),
+            filter([
+              [6, 60],
+              [8, 40],
+            ]),
+          ]),
+        ],
+      });
+      const brushIds = await page.evaluate(() => [
+        ...[...window.widget.brushGroups.values()][0].brushes.keys(),
+      ]);
+      const active = page.locator(`#brush-${brushIds[0]}`);
+      const other = page.locator(`#brush-${brushIds[1]}`);
+      await other
+        .locator("rect.selection")
+        .click({ modifiers: ["Shift"], position: { x: 20, y: 20 } });
+      await active
+        .locator("rect.selection")
+        .click({ modifiers: ["Shift"], position: { x: 20, y: 20 } });
+      await expect(active.locator("circle.circle")).toHaveCount(4);
+      await expect(other.locator("circle.circle")).toHaveCount(4);
+      const otherBefore = await other.innerHTML();
+      const otherDomain = (await domains(page))[1];
+      await coordinates(page).nth(input).fill(value);
+      await coordinates(page).nth(input).press("Tab");
+      const points = await active.evaluate((node) => {
+        const rect = node.querySelector("rect.selection");
+        const left = +rect.getAttribute("x") + 10;
+        const top = +rect.getAttribute("y") + 10;
+        const right =
+          +rect.getAttribute("x") + +rect.getAttribute("width") - 10;
+        const bottom =
+          +rect.getAttribute("y") + +rect.getAttribute("height") - 10;
+        return {
+          actual: [...node.querySelectorAll("circle.circle")].map((c) => [
+            +c.getAttribute("cx"),
+            +c.getAttribute("cy"),
+          ]),
+          expected: [
+            [left, top],
+            [right, bottom],
+            [left, bottom],
+            [right, top],
+          ],
+        };
+      });
+      points.actual.forEach((point, i) =>
+        point.forEach((v, axis) =>
+          expect(v).toBeCloseTo(points.expected[i][axis], 5)
+        )
+      );
+      expect(await other.innerHTML()).toEqual(otherBefore);
+      expect((await domains(page))[1]).toEqual(otherDomain);
+    });
+  }
+}

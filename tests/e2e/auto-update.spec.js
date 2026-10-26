@@ -9,6 +9,7 @@ import {
   selections,
   coordinates,
   domains,
+  key,
 } from "./helpers.js";
 
 test.beforeEach(async ({ page }) => open(page));
@@ -113,4 +114,62 @@ for (const autoUpdate of [true, false]) {
     await ids(page, []);
     expect(await domains(page)).toEqual(during);
   });
+}
+
+for (const autoUpdate of [true, false]) {
+  for (const selectedEnd of [8, 10]) {
+    for (const via of ["drag", "keyboard"]) {
+      test(`an unselected active TimeBox moves independently via ${via} with autoUpdate=${autoUpdate}, selectedEnd=${selectedEnd}`, async ({
+        page,
+      }) => {
+        await mount(page, {
+          autoUpdate,
+          filters: [
+            group([
+              filter([
+                [selectedEnd - 2, 60],
+                [selectedEnd, 40],
+              ]),
+              filter([
+                [2, 60],
+                [4, 40],
+              ]),
+            ]),
+          ],
+        });
+        const brushIds = await page.evaluate(() => [
+          ...[...window.widget.brushGroups.values()][0].brushes.keys(),
+        ]);
+        await page
+          .locator(`#brush-${brushIds[0]} rect.selection[width]`)
+          .click({ modifiers: ["Shift"], position: { x: 20, y: 20 } });
+        await page
+          .locator(`#brush-${brushIds[1]} rect.selection[width]`)
+          .click({ position: { x: 20, y: 20 } });
+        const before = await domains(page);
+        if (via === "keyboard") {
+          await key(page, "ArrowRight");
+        } else {
+          const box = await page
+            .locator(`#brush-${brushIds[1]} rect.selection[width]`)
+            .boundingBox();
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.down();
+          await page.mouse.move(
+            box.x + box.width / 2 + 70,
+            box.y + box.height / 2,
+            { steps: 8 }
+          );
+          expect((await domains(page))[0]).toEqual(before[0]);
+          await page.mouse.up();
+        }
+        const after = await domains(page);
+        expect(after[0]).toEqual(before[0]);
+        for (let corner = 0; corner < 2; corner++) {
+          expect(after[1][corner][0] - before[1][corner][0]).toBeCloseTo(1, 5);
+          expect(after[1][corner][1]).toBeCloseTo(before[1][corner][1], 5);
+        }
+      });
+    }
+  }
 }
